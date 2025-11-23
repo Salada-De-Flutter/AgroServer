@@ -4,12 +4,13 @@ const asaasService = require('../services/asaasService');
 const databaseService = require('../services/databaseService');
 
 /**
- * Rota para processar vendas de uma rota
+ * Rota OTIMIZADA para processar vendas de uma rota
  * POST /api/rota/vendas
+ * Suporta paginação: { rota_id, page, limit }
  */
 router.post('/rota/vendas', async (req, res) => {
   try {
-    const { rota_id } = req.body;
+    const { rota_id, page = 1, limit = 50 } = req.body;
 
     // Validação básica
     if (!rota_id) {
@@ -19,9 +20,15 @@ router.post('/rota/vendas', async (req, res) => {
       });
     }
 
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('�️  ID da rota recebido:', rota_id);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    // Validação de paginação
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+
+    console.log('\n==========================================');
+    console.log('ID da rota recebido:', rota_id);
+    console.log('Paginacao: Pagina', pageNum, '| Limite:', limitNum);
+    console.log('==========================================\n');
 
     // 1. Busca informações da rota no banco de dados
     console.log('🔍 Buscando informações da rota no banco de dados...');
@@ -45,47 +52,67 @@ router.post('/rota/vendas', async (req, res) => {
     console.log('   Vendedor:', rota.vendedor_nome || 'N/A');
     console.log('');
 
-    // 2. Busca todas as vendas dessa rota
-    console.log('🔍 Buscando vendas da rota...');
-    const vendasResult = await databaseService.query(
-      'SELECT id FROM vendas WHERE rota_id = $1',
+    // 2. Conta total de vendas dessa rota
+    console.log('🔍 Contando vendas da rota...');
+    const countResult = await databaseService.query(
+      'SELECT COUNT(*) as total FROM vendas WHERE rota_id = $1',
       [rota_id]
+    );
+    const totalVendas = parseInt(countResult.rows[0].total);
+
+    // 3. Busca vendas da rota com paginação
+    console.log('🔍 Buscando vendas da rota (paginadas)...');
+    const vendasResult = await databaseService.query(
+      'SELECT id FROM vendas WHERE rota_id = $1 LIMIT $2 OFFSET $3',
+      [rota_id, limitNum, offset]
     );
 
     if (vendasResult.rows.length === 0) {
-      console.log('⚠️  Nenhuma venda encontrada para esta rota\n');
+      console.log('⚠️  Nenhuma venda encontrada nesta pagina\n');
       return res.json({
         success: true,
-        message: 'Nenhuma venda encontrada para esta rota',
-        data: {
-          rota: {
-            id: rota.id,
-            nome: rota.nome,
-            vendedor: rota.vendedor_nome
-          },
-          vendas: [],
-          totalVendas: 0
-        }
+        message: 'Nenhuma venda encontrada nesta pagina',
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: totalVendas,
+          totalPages: Math.ceil(totalVendas / limitNum),
+          hasMore: false
+        },
+        data: []
       });
     }
 
-    console.log(`✅ Encontradas ${vendasResult.rows.length} venda(s)\n`);
+    console.log(`✅ Encontradas ${vendasResult.rows.length} venda(s) nesta pagina`);
+    console.log(`📊 Total geral: ${totalVendas} venda(s)\n`);
 
-    // 3. Para cada venda, busca informações no Asaas
-    const vendasComDetalhes = [];
+    // 4. Cache para clientes (evita requisições duplicadas)
+    const cacheClientes = new Map();
+
+    // 5. Para cada venda, busca informações no Asaas em PARALELO
+    console.log('⚡ Processando vendas em paralelo...\n');
+    const tempoInicio = Date.now();
     
-    for (const venda of vendasResult.rows) {
-      console.log(`📦 Processando venda: ${venda.id}`);
-      
-      try {
-        // Busca informações do parcelamento/venda no Asaas
-        const parcelamento = await asaasService.getInstallment(venda.id);
+    const vendasComDetalhes = await Promise.all(
+      vendasResult.rows.map(async (venda) => {
+        console.log(`📦 Processando venda: ${venda.id}`);
         
-        // Busca informações do cliente
-        const cliente = await asaasService.getCustomer(parcelamento.customer);
+        try {
+          // Busca informações do parcelamento/venda no Asaas
+          const parcelamento = await asaasService.getInstallment(venda.id);
+          
+          // Busca informações do cliente (com cache)
+          let cliente;
+          if (cacheClientes.has(parcelamento.customer)) {
+            cliente = cacheClientes.get(parcelamento.customer);
+            console.log('  💾 Cliente encontrado no cache');
+          } else {
+            cliente = await asaasService.getCustomer(parcelamento.customer);
+            cacheClientes.set(parcelamento.customer, cliente);
+          }
 
-        // Busca as parcelas do parcelamento
-        const parcelas = await asaasService.getInstallmentPayments(venda.id);
+          // Busca as parcelas do parcelamento
+          const parcelas = await asaasService.getInstallmentPayments(venda.id);
 
         // Classifica as parcelas por status
         const hoje = new Date();
@@ -133,7 +160,7 @@ router.post('/rota/vendas', async (req, res) => {
         console.log('     → A vencer:', parcelasAVencer.length);
         console.log('');
 
-        vendasComDetalhes.push({
+        return {
           parcelamentoId: venda.id,
           clienteId: cliente.id,
           nomeCliente: cliente.name,
@@ -153,27 +180,48 @@ router.post('/rota/vendas', async (req, res) => {
             valor: parcelasAVencer.reduce((acc, p) => acc + p.valor, 0),
             parcelas: parcelasAVencer
           }
-        });
+        };
 
       } catch (error) {
         console.log(`  ❌ Erro ao processar venda ${venda.id}:`, error.message);
         console.log('');
         
         // Continua processando as outras vendas mesmo se uma falhar
-        vendasComDetalhes.push({
+        return {
+          parcelamentoId: venda.id,
           nomeCliente: 'Erro ao processar',
           status: 'Erro',
           erro: error.message
-        });
+        };
       }
-    }
+    })
+  );
 
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`✅ Processamento concluído: ${vendasComDetalhes.length} vendas`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    const tempoTotal = ((Date.now() - tempoInicio) / 1000).toFixed(2);
+    
+    console.log('==========================================');
+    console.log(`💾 Cache: ${cacheClientes.size} cliente(s) unicos`);
+    console.log(`⚡ Tempo de processamento: ${tempoTotal}s`);
+    console.log(`✅ Processamento concluido: ${vendasComDetalhes.length} vendas`);
+    console.log('==========================================\n');
 
-    // Resposta de sucesso - retorna apenas as informações solicitadas
-    res.json(vendasComDetalhes);
+    // Resposta de sucesso com paginação e métricas de performance
+    res.json({
+      success: true,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalVendas,
+        totalPages: Math.ceil(totalVendas / limitNum),
+        hasMore: pageNum < Math.ceil(totalVendas / limitNum)
+      },
+      performance: {
+        tempoProcessamento: `${tempoTotal}s`,
+        clientesCache: cacheClientes.size,
+        vendasProcessadas: vendasComDetalhes.length
+      },
+      data: vendasComDetalhes
+    });
 
   } catch (error) {
     console.error('\n❌ ERRO AO PROCESSAR VENDAS DA ROTA:');
