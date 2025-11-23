@@ -4,29 +4,54 @@ const asaasService = require('../services/asaasService');
 const databaseService = require('../services/databaseService');
 
 /**
- * Rota para listar clientes do Asaas com paginação
- * GET /api/clientes/listar?page=1&limit=20
+ * Rota para listar clientes do Asaas com paginação e busca
+ * GET /api/clientes/listar?page=1&limit=20&search=nome
  */
 router.get('/clientes/listar', async (req, res) => {
   try {
     // Parâmetros de paginação (com valores padrão)
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
     const offset = (page - 1) * limit;
 
-    console.log(`\n🔍 Buscando clientes - Página ${page} (${limit} por página)...`);
+    if (search) {
+      console.log(`\n🔍 Buscando clientes com termo: "${search}" - Página ${page}`);
+    } else {
+      console.log(`\n🔍 Buscando clientes - Página ${page} (${limit} por página)...`);
+    }
 
-    // Busca clientes do Asaas com paginação
-    const response = await asaasService.listCustomers({
+    // Monta parâmetros para a API do Asaas
+    const params = {
       limit: limit,
       offset: offset
-    });
+    };
+
+    // Se houver termo de busca, adiciona aos parâmetros
+    // A API do Asaas aceita 'name' para buscar por nome
+    if (search) {
+      // Verifica se é CPF/CNPJ (apenas números)
+      const apenasNumeros = search.replace(/\D/g, '');
+      
+      if (apenasNumeros.length >= 11) {
+        // Se tiver 11+ dígitos, busca por CPF/CNPJ
+        params.cpfCnpj = apenasNumeros;
+        console.log(`   📋 Buscando por CPF/CNPJ: ${apenasNumeros}`);
+      } else {
+        // Senão, busca por nome
+        params.name = search;
+        console.log(`   👤 Buscando por nome: ${search}`);
+      }
+    }
+
+    // Busca clientes do Asaas com paginação e filtro
+    const response = await asaasService.listCustomers(params);
 
     const clientes = response.data || [];
     const hasMore = response.hasMore || false;
     const totalCount = response.totalCount || 0;
 
-    console.log(`✅ ${clientes.length} clientes retornados\n`);
+    console.log(`✅ ${clientes.length} cliente(s) encontrado(s)\n`);
 
     // Formata a resposta para o frontend
     const clientesFormatados = clientes.map(cliente => ({
@@ -48,6 +73,7 @@ router.get('/clientes/listar', async (req, res) => {
         hasMore: hasMore,
         totalPages: Math.ceil(totalCount / limit)
       },
+      search: search,
       clientes: clientesFormatados
     });
 
