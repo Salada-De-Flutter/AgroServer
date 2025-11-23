@@ -15,11 +15,11 @@ async function processarEmLotes(items, batchSize, processFunction) {
     const batchResults = await Promise.all(batch.map(processFunction));
     results.push(...batchResults);
     
-    // Delay entre lotes para evitar saturar a API (1000ms = 1s)
+    // Delay entre lotes para evitar saturar a API (250ms = 0.25s)
     // Endpoint /payments tem limite de 140 req/min, precisa de delays maiores
     if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log(`  ⏳ Aguardando 500ms antes do próximo lote...`);
+      await new Promise(resolve => setTimeout(resolve, 250));
+      console.log(`  ⏳ Aguardando 250ms antes do próximo lote...`);
     }
   }
 
