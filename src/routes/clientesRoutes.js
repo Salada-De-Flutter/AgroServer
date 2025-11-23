@@ -226,4 +226,70 @@ router.post('/rota/adicionar-parcelamento', async (req, res) => {
   }
 });
 
+/**
+ * Rota para remover um parcelamento de uma rota
+ * DELETE /api/rota/remover-parcelamento
+ * Body: { rota_id, parcelamento_id }
+ */
+router.delete('/rota/remover-parcelamento', async (req, res) => {
+  try {
+    const { rota_id, parcelamento_id } = req.body;
+
+    // Validação
+    if (!rota_id || !parcelamento_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'rota_id e parcelamento_id são obrigatórios'
+      });
+    }
+
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🗑️  Removendo parcelamento da rota');
+    console.log('  → Rota ID:', rota_id);
+    console.log('  → Parcelamento ID:', parcelamento_id);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    // Verifica se o parcelamento existe na rota
+    const vendaResult = await databaseService.query(
+      'SELECT id, rota_id FROM vendas WHERE id = $1 AND rota_id = $2',
+      [parcelamento_id, rota_id]
+    );
+
+    if (vendaResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parcelamento não encontrado nesta rota'
+      });
+    }
+
+    // Remove o parcelamento da tabela vendas
+    const deleteResult = await databaseService.query(
+      'DELETE FROM vendas WHERE id = $1 AND rota_id = $2',
+      [parcelamento_id, rota_id]
+    );
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ Parcelamento removido com sucesso!');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    res.json({
+      success: true,
+      message: 'Parcelamento removido da rota com sucesso',
+      data: {
+        parcelamento_id: parcelamento_id,
+        rota_id: rota_id
+      }
+    });
+
+  } catch (error) {
+    console.error('\n❌ ERRO ao remover parcelamento:', error.message);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao remover parcelamento',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
