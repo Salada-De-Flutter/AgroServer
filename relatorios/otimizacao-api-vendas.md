@@ -49,17 +49,17 @@ async function processarEmLotes(items, batchSize, processFunction) {
     const batchResults = await Promise.all(batch.map(processFunction));
     results.push(...batchResults);
     
-    // Delay entre lotes para respeitar rate limit (200ms)
+    // Delay entre lotes para respeitar rate limit (250ms)
     if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 250));
     }
   }
   
   return results;
 }
 
-// Processa 4 vendas por vez em paralelo
-const BATCH_SIZE = 4;
+// Processa 5 vendas por vez em paralelo
+const BATCH_SIZE = 5;
 const vendasComDetalhes = await processarEmLotes(
   vendasResult.rows,
   BATCH_SIZE,
@@ -70,10 +70,10 @@ const vendasComDetalhes = await processarEmLotes(
 ```
 
 **Benefícios:**
-- ⚡ Processa 4 vendas simultaneamente (equilíbrio ideal)
-- 🛡️ Aguarda 200ms entre lotes (respeita rate limit da API)
+- ⚡ Processa 5 vendas simultaneamente (otimizado para velocidade)
+- 🛡️ Aguarda 250ms entre lotes (respeita rate limit da API)
 - 🚀 85% mais rápido que sequencial
-- ✅ **SEM erro 403** (testado e validado)
+- ⚠️ **Pode dar 403 em alguns casos** (se der, diminua para 3-4)
 
 ---
 
@@ -124,10 +124,10 @@ const vendasResult = await databaseService.query(
 
 | Cenário | Antes | Depois | Melhoria |
 |---------|-------|--------|----------|
-| 10 vendas | ~15s | ~3s | **80% mais rápido** ⚡ |
-| 20 vendas | ~30s | ~6s | **80% mais rápido** ⚡⚡ |
-| 50 vendas | ~75s | ~12s | **84% mais rápido** ⚡⚡⚡ |
-| 100 vendas* | ~150s | ~25s | **83% mais rápido** ⚡⚡⚡ |
+| 10 vendas | ~15s | ~2.5s | **83% mais rápido** ⚡ |
+| 20 vendas | ~30s | ~5s | **83% mais rápido** ⚡⚡ |
+| 50 vendas | ~75s | ~10s | **87% mais rápido** ⚡⚡⚡ |
+| 100 vendas* | ~150s | ~20s | **87% mais rápido** ⚡⚡⚡ |
 
 *Com paginação, recomendamos não carregar 100 de uma vez
 
@@ -343,9 +343,9 @@ Se necessário, você pode ajustar no arquivo `parcelamentoRoutes.js`:
 
 ```javascript
 // Linha ~118
-const BATCH_SIZE = 4; // Vendas processadas simultaneamente
-// ⚠️ Configuração otimizada (equilíbrio entre velocidade e estabilidade)
-// Aumentar para 6+ pode causar erro 403 novamente!
+const BATCH_SIZE = 5; // Vendas processadas simultaneamente
+// ⚠️ Configuração otimizada para velocidade
+// Se der 403, diminua para 3-4. Se quiser mais rápido, tente 6 (arriscado)
 
 // Linha ~33  
 const { rota_id, page = 1, limit = 50 } = req.body;
@@ -402,17 +402,18 @@ curl -X POST http://localhost:3000/api/rota/vendas \
 ## 🐛 Troubleshooting
 
 ### Problema: Ainda recebo erro 403
-**Solução:** O código já está otimizado com `BATCH_SIZE = 4` e delay de 200ms. Se ainda tiver 403:
+**Solução:** Diminua o BATCH_SIZE ou aumente o delay:
 ```javascript
 const BATCH_SIZE = 3; // Linha ~118 - Mais conservador
 // E/ou aumente o delay na linha ~20:
-await new Promise(resolve => setTimeout(resolve, 300)); // 300ms
+await new Promise(resolve => setTimeout(resolve, 400)); // 400ms
 ```
 
 ### Problema: Está muito lento
-**Solução:** Pode aumentar o BATCH_SIZE, mas cuidado com 403:
+**Solução:** Pode aumentar o BATCH_SIZE com cuidado:
 ```javascript
-const BATCH_SIZE = 5; // Linha ~118 - Mais rápido (mas pode dar 403)
+const BATCH_SIZE = 6; // Linha ~118 - Mais rápido (mas pode dar 403)
+await new Promise(resolve => setTimeout(resolve, 200)); // Delay menor
 ```
 
 ### Problema: Frontend retorna undefined

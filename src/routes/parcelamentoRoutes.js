@@ -15,10 +15,10 @@ async function processarEmLotes(items, batchSize, processFunction) {
     const batchResults = await Promise.all(batch.map(processFunction));
     results.push(...batchResults);
     
-    // Delay entre lotes para respeitar rate limit (200ms = 0.2 segundo)
+    // Delay entre lotes para respeitar rate limit (250ms)
     if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      console.log(`  ⏳ Aguardando 200ms antes do próximo lote...`);
+      await new Promise(resolve => setTimeout(resolve, 250));
+      console.log(`  ⏳ Aguardando 250ms antes do próximo lote...`);
     }
   }
   
@@ -117,7 +117,7 @@ router.post('/rota/vendas', async (req, res) => {
     const cacheClientes = new Map();
 
     // 5. Para cada venda, busca informações no Asaas em LOTES (evita rate limit)
-    const BATCH_SIZE = 4; // Processa 4 vendas por vez (equilíbrio entre velocidade e estabilidade)
+    const BATCH_SIZE = 5; // Processa 5 vendas por vez (otimizado para velocidade)
     console.log(`⚡ Processando vendas em lotes de ${BATCH_SIZE}...\n`);
     const tempoInicio = Date.now();
     
