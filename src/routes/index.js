@@ -3,6 +3,7 @@ const router = express.Router();
 const asaasRoutes = require('./asaasRoutes');
 const databaseRoutes = require('./databaseRoutes');
 const parcelamentoRoutes = require('./parcelamentoRoutes');
+const clientesRoutes = require('./clientesRoutes');
 
 // Rota principal
 router.get('/', (req, res) => {
@@ -12,6 +13,10 @@ router.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       api: '/api',
+      clientes: {
+        listar: 'GET /api/clientes/listar - Lista todos os clientes do Asaas',
+        adicionar: 'POST /api/rota/adicionar-cliente - Adiciona cliente a uma rota'
+      },
       rotas: {
         vendas: 'POST /api/rota/vendas - Busca vendas e clientes de uma rota'
       },
@@ -29,6 +34,9 @@ router.get('/', (req, res) => {
     }
   });
 });
+
+// Rotas de clientes
+router.use('/', clientesRoutes);
 
 // Rotas oficiais da API
 router.use('/', parcelamentoRoutes);
