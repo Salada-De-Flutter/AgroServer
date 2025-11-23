@@ -18,11 +18,11 @@ async function processarEmLotes(items, batchSize, processFunction) {
     // Delay entre lotes para evitar saturar a API (1000ms = 1s)
     // Endpoint /payments tem limite de 140 req/min, precisa de delays maiores
     if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log(`  ⏳ Aguardando 1000ms antes do próximo lote...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log(`  ⏳ Aguardando 500ms antes do próximo lote...`);
     }
   }
-  
+
   return results;
 }
 
@@ -123,8 +123,8 @@ router.post('/rota/vendas', async (req, res) => {
     // CRÍTICO: Endpoint /payments tem limite de 140 req/min (mais rigoroso)
     // Com 80 vendas, precisamos espaçar bastante para não estourar
     // 140 req/min = ~2.3 req/segundo
-    // Processando 3 vendas por lote com 1000ms = ~3 req/segundo (seguro)
-    const BATCH_SIZE = 3; // Processa apenas 3 vendas por vez
+    // Processando 1 venda por lote com 500ms = ~2 req/segundo (seguro)
+    const BATCH_SIZE = 1; // Processa apenas 1 venda por vez
     console.log(`⚡ Processando vendas em lotes de ${BATCH_SIZE}...\n`);
     const tempoInicio = Date.now();
     
