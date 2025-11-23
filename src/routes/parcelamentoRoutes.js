@@ -134,6 +134,8 @@ router.post('/rota/vendas', async (req, res) => {
         console.log('');
 
         vendasComDetalhes.push({
+          parcelamentoId: venda.id,
+          clienteId: cliente.id,
           nomeCliente: cliente.name,
           status: statusGeral,
           parcelasVencidas: {
