@@ -4,9 +4,35 @@ const asaasService = require('../services/asaasService');
 const databaseService = require('../services/databaseService');
 
 /**
+ * Função auxiliar para processar itens em lotes (batch processing)
+ * Evita sobrecarga da API com rate limiting
+ */
+async function processarEmLotes(items, batchSize, processFunction) {
+  const results = [];
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(processFunction));
+    results.push(...batchResults);
+    
+    // Pequeno delay entre lotes para respeitar rate limit
+    if (i + batchSize < items.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  return results;
+}
+
+/**
  * Rota OTIMIZADA para processar vendas de uma rota
  * POST /api/rota/vendas
  * Suporta paginação: { rota_id, page, limit }
+ * 
+ * Otimizações:
+ * - Processamento em lotes controlados (evita rate limit 403)
+ * - Cache de clientes
+ * - Paginação
  */
 router.post('/rota/vendas', async (req, res) => {
   try {
@@ -89,12 +115,15 @@ router.post('/rota/vendas', async (req, res) => {
     // 4. Cache para clientes (evita requisições duplicadas)
     const cacheClientes = new Map();
 
-    // 5. Para cada venda, busca informações no Asaas em PARALELO
-    console.log('⚡ Processando vendas em paralelo...\n');
+    // 5. Para cada venda, busca informações no Asaas em LOTES (evita rate limit)
+    const BATCH_SIZE = 5; // Processa 5 vendas por vez
+    console.log(`⚡ Processando vendas em lotes de ${BATCH_SIZE}...\n`);
     const tempoInicio = Date.now();
     
-    const vendasComDetalhes = await Promise.all(
-      vendasResult.rows.map(async (venda) => {
+    const vendasComDetalhes = await processarEmLotes(
+      vendasResult.rows,
+      BATCH_SIZE,
+      async (venda) => {
         console.log(`📦 Processando venda: ${venda.id}`);
         
         try {
@@ -194,7 +223,7 @@ router.post('/rota/vendas', async (req, res) => {
           erro: error.message
         };
       }
-    })
+    }
   );
 
     const tempoTotal = ((Date.now() - tempoInicio) / 1000).toFixed(2);
