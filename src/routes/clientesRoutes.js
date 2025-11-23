@@ -4,40 +4,32 @@ const asaasService = require('../services/asaasService');
 const databaseService = require('../services/databaseService');
 
 /**
- * Rota para listar todos os clientes do Asaas
- * GET /api/clientes/listar
+ * Rota para listar clientes do Asaas com paginação
+ * GET /api/clientes/listar?page=1&limit=20
  */
 router.get('/clientes/listar', async (req, res) => {
   try {
-    console.log('\n🔍 Buscando lista de clientes do Asaas...');
+    // Parâmetros de paginação (com valores padrão)
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
 
-    // Busca todos os clientes do Asaas (paginação automática)
-    let todosClientes = [];
-    let offset = 0;
-    const limit = 100;
-    let hasMore = true;
+    console.log(`\n🔍 Buscando clientes - Página ${page} (${limit} por página)...`);
 
-    while (hasMore) {
-      const response = await asaasService.listCustomers({
-        limit: limit,
-        offset: offset
-      });
+    // Busca clientes do Asaas com paginação
+    const response = await asaasService.listCustomers({
+      limit: limit,
+      offset: offset
+    });
 
-      if (response.data && response.data.length > 0) {
-        todosClientes = todosClientes.concat(response.data);
-        offset += limit;
-        
-        // Verifica se tem mais páginas
-        hasMore = response.hasMore || false;
-      } else {
-        hasMore = false;
-      }
-    }
+    const clientes = response.data || [];
+    const hasMore = response.hasMore || false;
+    const totalCount = response.totalCount || 0;
 
-    console.log(`✅ ${todosClientes.length} clientes encontrados\n`);
+    console.log(`✅ ${clientes.length} clientes retornados\n`);
 
     // Formata a resposta para o frontend
-    const clientesFormatados = todosClientes.map(cliente => ({
+    const clientesFormatados = clientes.map(cliente => ({
       id: cliente.id,
       nome: cliente.name,
       cpfCnpj: cliente.cpfCnpj || 'Não informado',
@@ -49,7 +41,13 @@ router.get('/clientes/listar', async (req, res) => {
 
     res.json({
       success: true,
-      total: clientesFormatados.length,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: totalCount,
+        hasMore: hasMore,
+        totalPages: Math.ceil(totalCount / limit)
+      },
       clientes: clientesFormatados
     });
 
