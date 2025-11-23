@@ -157,16 +157,21 @@ router.post('/rota/vendas', async (req, res) => {
         const parcelasVencidas = [];
         const parcelasAVencer = [];
 
+        // Status de pagamento confirmado na API Asaas
+        const statusPagos = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+
         parcelas.forEach(parcela => {
           const dataVencimento = new Date(parcela.dueDate);
           
-          if (parcela.status === 'RECEIVED') {
+          // Verifica se a parcela foi paga (aceita PIX, boleto, dinheiro, etc)
+          if (statusPagos.includes(parcela.status)) {
             parcelasPagas.push({
               valor: parcela.value,
               dataVencimento: parcela.dueDate,
-              dataPagamento: parcela.paymentDate
+              dataPagamento: parcela.paymentDate,
+              formaPagamento: parcela.billingType // PIX, BOLETO, etc
             });
-          } else if (parcela.status === 'OVERDUE' || (dataVencimento < hoje && parcela.status !== 'RECEIVED')) {
+          } else if (parcela.status === 'OVERDUE' || (dataVencimento < hoje && !statusPagos.includes(parcela.status))) {
             parcelasVencidas.push({
               valor: parcela.value,
               dataVencimento: parcela.dueDate

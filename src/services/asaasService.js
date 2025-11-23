@@ -159,7 +159,7 @@ class AsaasService {
    * @param {string} installmentId - ID do parcelamento
    * @returns {Promise<Array>}
    */
-  async getInstallmentPayments(installmentId) {
+  async getInstallmentPayments(installmentId, retries = 3) {
     try {
       const response = await this.client.get(`/payments`, {
         params: {
@@ -168,6 +168,16 @@ class AsaasService {
       });
       return response.data.data || [];
     } catch (error) {
+      const status = error.response?.status;
+      
+      // Se for 403 (Forbidden) ou 429 (Too Many Requests) e ainda tem retries
+      if ((status === 403 || status === 429) && retries > 0) {
+        const waitTime = status === 429 ? 2000 : 1000; // 2s para 429, 1s para 403
+        console.log(`  ⏳ Rate limit atingido (${status}), aguardando ${waitTime}ms antes de tentar novamente...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return this.getInstallmentPayments(installmentId, retries - 1);
+      }
+      
       throw new Error(`Erro ao obter parcelas: ${error.message}`);
     }
   }
