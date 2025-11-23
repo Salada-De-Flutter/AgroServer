@@ -15,11 +15,11 @@ async function processarEmLotes(items, batchSize, processFunction) {
     const batchResults = await Promise.all(batch.map(processFunction));
     results.push(...batchResults);
     
-    // Delay entre lotes para evitar saturar a API (250ms = 0.25s)
+    // Delay entre lotes para evitar saturar a API (300ms = 0.3s)
     // Mesmo respeitando limite de concorrência, a API pode ter rate limit por tempo
     if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 250));
-      console.log(`  ⏳ Aguardando 250ms antes do próximo lote...`);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      console.log(`  ⏳ Aguardando 300ms antes do próximo lote...`);
     }
   }
   
@@ -38,7 +38,9 @@ async function processarEmLotes(items, batchSize, processFunction) {
  */
 router.post('/rota/vendas', async (req, res) => {
   try {
-    const { rota_id, page = 1, limit = 50 } = req.body;
+    // Limite padrão alto (1000) para cálculos que precisam de todos os clientes
+    // O frontend pode sobrescrever se quiser paginação
+    const { rota_id, page = 1, limit = 1000 } = req.body;
 
     // Validação básica
     if (!rota_id) {
