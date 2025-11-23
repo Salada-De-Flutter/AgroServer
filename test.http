@@ -1,0 +1,19 @@
+### Testar rota de parcelamento
+POST http://localhost:3000/api/parcelamento
+Content-Type: application/json
+
+{
+  "id": "3ef2fc4b-8459-4270-822d-b6dc9dc61369"
+}
+
+###
+
+### Health check
+GET http://localhost:3000/health
+
+###
+
+### API Info
+GET http://localhost:3000/api/
+
+###
