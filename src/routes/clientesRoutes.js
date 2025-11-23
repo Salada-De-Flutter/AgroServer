@@ -89,25 +89,78 @@ router.get('/clientes/listar', async (req, res) => {
 });
 
 /**
- * Rota para adicionar cliente (via parcelamento) a uma rota
- * POST /api/rota/adicionar-cliente
+ * Rota para buscar parcelamentos de um cliente específico
+ * GET /api/clientes/:cliente_id/parcelamentos
  */
-router.post('/rota/adicionar-cliente', async (req, res) => {
+router.get('/clientes/:cliente_id/parcelamentos', async (req, res) => {
   try {
-    const { rota_id, cliente_id } = req.body;
+    const { cliente_id } = req.params;
+
+    console.log(`\n🔍 Buscando parcelamentos do cliente: ${cliente_id}`);
+
+    // Busca informações do cliente
+    const cliente = await asaasService.getCustomer(cliente_id);
+    
+    // Busca parcelamentos do cliente
+    const installmentsResponse = await asaasService.client.get('/installments', {
+      params: { customer: cliente_id }
+    });
+
+    const parcelamentos = installmentsResponse.data.data || [];
+
+    console.log(`✅ ${parcelamentos.length} parcelamento(s) encontrado(s)\n`);
+
+    // Formata parcelamentos para o frontend
+    const parcelamentosFormatados = parcelamentos.map(p => ({
+      id: p.id,
+      valor: p.value,
+      numeroParcelas: p.installmentCount,
+      descricao: p.description || 'Sem descrição',
+      dataCriacao: p.dateCreated,
+      status: p.status
+    }));
+
+    res.json({
+      success: true,
+      cliente: {
+        id: cliente.id,
+        nome: cliente.name,
+        cpfCnpj: cliente.cpfCnpj
+      },
+      parcelamentos: parcelamentosFormatados
+    });
+
+  } catch (error) {
+    console.error('\n❌ Erro ao buscar parcelamentos:', error.message);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar parcelamentos do cliente',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Rota para adicionar um parcelamento específico a uma rota
+ * POST /api/rota/adicionar-parcelamento
+ */
+router.post('/rota/adicionar-parcelamento', async (req, res) => {
+  try {
+    const { rota_id, parcelamento_id } = req.body;
 
     // Validação
-    if (!rota_id || !cliente_id) {
+    if (!rota_id || !parcelamento_id) {
       return res.status(400).json({
         success: false,
-        message: 'rota_id e cliente_id são obrigatórios'
+        message: 'rota_id e parcelamento_id são obrigatórios'
       });
     }
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📝 Adicionando cliente à rota');
+    console.log('📝 Adicionando parcelamento à rota');
     console.log('  → Rota ID:', rota_id);
-    console.log('  → Cliente ID:', cliente_id);
+    console.log('  → Parcelamento ID:', parcelamento_id);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // Verifica se a rota existe
@@ -123,66 +176,29 @@ router.post('/rota/adicionar-cliente', async (req, res) => {
       });
     }
 
-    // Busca informações do cliente no Asaas
-    console.log('🔍 Buscando informações do cliente no Asaas...');
-    const cliente = await asaasService.getCustomer(cliente_id);
-    console.log(`✅ Cliente encontrado: ${cliente.name}\n`);
+    // Busca informações do parcelamento no Asaas
+    console.log('🔍 Buscando informações do parcelamento...');
+    const parcelamento = await asaasService.getInstallment(parcelamento_id);
+    
+    // Busca informações do cliente
+    const cliente = await asaasService.getCustomer(parcelamento.customer);
+    console.log(`✅ Parcelamento encontrado: ${cliente.name} - R$ ${parcelamento.value}\n`);
 
-    // Busca parcelamentos do cliente no Asaas
-    console.log('🔍 Buscando parcelamentos do cliente...');
-    const installmentsResponse = await asaasService.client.get('/installments', {
-      params: { customer: cliente_id }
-    });
+    // Adiciona o parcelamento como venda na rota
+    await databaseService.query(
+      `INSERT INTO vendas (id, rota_id) 
+       VALUES ($1, $2) 
+       ON CONFLICT (id) DO UPDATE SET rota_id = $2`,
+      [parcelamento_id, rota_id]
+    );
 
-    const parcelamentos = installmentsResponse.data.data || [];
-
-    if (parcelamentos.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Cliente não possui parcelamentos cadastrados',
-        cliente: {
-          nome: cliente.name,
-          cpfCnpj: cliente.cpfCnpj
-        }
-      });
-    }
-
-    console.log(`✅ Encontrados ${parcelamentos.length} parcelamento(s)\n`);
-
-    // Adiciona cada parcelamento como venda na rota
-    let vendasAdicionadas = 0;
-    const vendasDetalhes = [];
-
-    for (const parcelamento of parcelamentos) {
-      try {
-        await databaseService.query(
-          `INSERT INTO vendas (id, rota_id) 
-           VALUES ($1, $2) 
-           ON CONFLICT (id) DO UPDATE SET rota_id = $2`,
-          [parcelamento.id, rota_id]
-        );
-
-        vendasAdicionadas++;
-        vendasDetalhes.push({
-          parcelamentoId: parcelamento.id,
-          valor: parcelamento.value,
-          parcelas: parcelamento.installmentCount,
-          descricao: parcelamento.description
-        });
-
-        console.log(`  ✅ Parcelamento ${parcelamento.id} adicionado`);
-      } catch (err) {
-        console.log(`  ⚠️  Erro ao adicionar parcelamento ${parcelamento.id}:`, err.message);
-      }
-    }
-
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`✅ ${vendasAdicionadas} venda(s) adicionada(s) com sucesso`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ Parcelamento adicionado com sucesso!');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     res.json({
       success: true,
-      message: `${vendasAdicionadas} venda(s) adicionada(s) com sucesso`,
+      message: 'Parcelamento adicionado com sucesso',
       data: {
         rota: rotaResult.rows[0],
         cliente: {
@@ -190,17 +206,21 @@ router.post('/rota/adicionar-cliente', async (req, res) => {
           nome: cliente.name,
           cpfCnpj: cliente.cpfCnpj
         },
-        vendasAdicionadas: vendasAdicionadas,
-        vendas: vendasDetalhes
+        parcelamento: {
+          id: parcelamento.id,
+          valor: parcelamento.value,
+          numeroParcelas: parcelamento.installmentCount,
+          descricao: parcelamento.description
+        }
       }
     });
 
   } catch (error) {
-    console.error('\n❌ ERRO ao adicionar cliente:', error.message);
+    console.error('\n❌ ERRO ao adicionar parcelamento:', error.message);
     
     res.status(500).json({
       success: false,
-      message: 'Erro ao adicionar cliente',
+      message: 'Erro ao adicionar parcelamento',
       error: error.message
     });
   }

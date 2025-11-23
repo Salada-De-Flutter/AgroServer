@@ -15,7 +15,8 @@ router.get('/', (req, res) => {
       api: '/api',
       clientes: {
         listar: 'GET /api/clientes/listar - Lista todos os clientes do Asaas',
-        adicionar: 'POST /api/rota/adicionar-cliente - Adiciona cliente a uma rota'
+        parcelamentos: 'GET /api/clientes/:cliente_id/parcelamentos - Lista parcelamentos de um cliente',
+        adicionarParcelamento: 'POST /api/rota/adicionar-parcelamento - Adiciona parcelamento específico a uma rota'
       },
       rotas: {
         vendas: 'POST /api/rota/vendas - Busca vendas e clientes de uma rota'
