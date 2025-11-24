@@ -6,6 +6,7 @@ const databaseService = require('../services/databaseService');
 /**
  * Função auxiliar para processar itens em lotes (batch processing)
  * Evita sobrecarga da API com rate limiting
+ * Sistema automático de proteção verifica rate limit a cada 5 requisições
  */
 async function processarEmLotes(items, batchSize, processFunction) {
   const results = [];
@@ -15,11 +16,11 @@ async function processarEmLotes(items, batchSize, processFunction) {
     const batchResults = await Promise.all(batch.map(processFunction));
     results.push(...batchResults);
     
-    // Delay entre lotes para evitar saturar a API (250ms = 0.25s)
-    // Endpoint /payments tem limite de 140 req/min, precisa de delays maiores
+    // Delay entre lotes (100ms para desempenho máximo)
+    // Proteção automática verifica e aguarda se remaining <= 10
     if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 250));
-      console.log(`  ⏳ Aguardando 250ms antes do próximo lote...`);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log(`  ⏳ Aguardando 100ms antes do próximo lote...`);
     }
   }
 
@@ -119,12 +120,11 @@ router.post('/rota/vendas', async (req, res) => {
     // 4. Cache para clientes (evita requisições duplicadas)
     const cacheClientes = new Map();
 
-    // 5. Para cada venda, busca informações no Asaas em LOTES (evita rate limit)
-    // CRÍTICO: Endpoint /payments tem limite de 140 req/min (mais rigoroso)
-    // Com 80 vendas, precisamos espaçar bastante para não estourar
-    // 140 req/min = ~2.3 req/segundo
-    // Processando 1 venda por lote com 500ms = ~2 req/segundo (seguro)
-    const BATCH_SIZE = 1; // Processa apenas 1 venda por vez
+    // 5. Para cada venda, busca informações no Asaas em LOTES (desempenho máximo)
+    // Sistema automático de proteção verifica rate limit a cada 5 requisições
+    // Se remaining <= 10, aguarda automaticamente o reset
+    // BATCH_SIZE = 10 para máximo desempenho (proteção automática previne rate limit)
+    const BATCH_SIZE = 10; // Processa 10 vendas por lote
     console.log(`⚡ Processando vendas em lotes de ${BATCH_SIZE}...\n`);
     const tempoInicio = Date.now();
     
