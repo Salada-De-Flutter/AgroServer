@@ -120,12 +120,12 @@ router.post('/rota/vendas', async (req, res) => {
     // 4. Cache para clientes (evita requisições duplicadas)
     const cacheClientes = new Map();
 
-    // 5. Para cada venda, busca informações no Asaas em LOTES (desempenho máximo)
+    // 5. Para cada venda, busca informações no Asaas SEQUENCIALMENTE
     // Sistema automático de proteção verifica rate limit a cada 5 requisições
     // Se remaining <= 10, aguarda automaticamente o reset
-    // BATCH_SIZE = 10 para máximo desempenho (proteção automática previne rate limit)
-    const BATCH_SIZE = 10; // Processa 10 vendas por lote
-    console.log(`⚡ Processando vendas em lotes de ${BATCH_SIZE}...\n`);
+    // BATCH_SIZE = 1 para evitar múltiplas requisições simultâneas
+    const BATCH_SIZE = 1; // Processa 1 venda por vez (sequencial)
+    console.log(`⚡ Processando vendas sequencialmente (1 por vez)...\n`);
     const tempoInicio = Date.now();
     
     const vendasComDetalhes = await processarEmLotes(

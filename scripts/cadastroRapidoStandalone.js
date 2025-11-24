@@ -350,12 +350,13 @@ async function main() {
       erros: []
     };
 
-    // Processa em lotes de 10 (desempenho máximo com proteção automática)
-    const BATCH_SIZE = 10;
+    // Processa SEQUENCIALMENTE (1 por vez para evitar rate limit)
+    // Sistema de proteção verifica a cada 5 requisições
+    const BATCH_SIZE = 1;
     for (let i = 0; i < CPFs.length; i += BATCH_SIZE) {
       const batch = CPFs.slice(i, i + BATCH_SIZE);
       
-      console.log(`📦 Processando lote ${Math.floor(i / BATCH_SIZE) + 1} (CPFs ${i + 1}-${Math.min(i + BATCH_SIZE, CPFs.length)})...`);
+      console.log(`📦 Processando CPF ${i + 1}/${CPFs.length}...`);
       
       const batchResults = await Promise.all(
         batch.map(cpf => processarCPF(cpf, rotaEscolhida.id, client))
@@ -374,7 +375,7 @@ async function main() {
         }
       });
 
-      // Delay entre lotes (100ms para desempenho máximo)
+      // Delay entre CPFs (100ms)
       if (i + BATCH_SIZE < CPFs.length) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
