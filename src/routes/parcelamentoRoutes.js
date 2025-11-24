@@ -5,8 +5,8 @@ const databaseService = require('../services/databaseService');
 
 /**
  * Função auxiliar para processar itens em lotes (batch processing)
- * Evita sobrecarga da API com rate limiting
  * Sistema automático de proteção verifica rate limit a cada 5 requisições
+ * Sem delay artificial - proteção automática controla o ritmo
  */
 async function processarEmLotes(items, batchSize, processFunction) {
   const results = [];
@@ -16,12 +16,7 @@ async function processarEmLotes(items, batchSize, processFunction) {
     const batchResults = await Promise.all(batch.map(processFunction));
     results.push(...batchResults);
     
-    // Delay entre lotes (100ms para desempenho máximo)
-    // Proteção automática verifica e aguarda se remaining <= 10
-    if (i + batchSize < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      console.log(`  ⏳ Aguardando 100ms antes do próximo lote...`);
-    }
+    // Sem delay - proteção automática verifica e aguarda se remaining <= 10
   }
 
   return results;

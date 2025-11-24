@@ -375,10 +375,7 @@ async function main() {
         }
       });
 
-      // Delay entre CPFs (100ms)
-      if (i + BATCH_SIZE < CPFs.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      // Sem delay artificial - proteção automática controla o ritmo
     }
 
     const tempoTotal = ((Date.now() - tempoInicio) / 1000).toFixed(2);
