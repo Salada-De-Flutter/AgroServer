@@ -130,21 +130,27 @@ router.post('/rota/vendas', async (req, res) => {
         console.log(`📦 Processando venda: ${venda.id}`);
         
         try {
-          // Busca informações do parcelamento/venda no Asaas
-          const parcelamento = await asaasService.getInstallment(venda.id);
+          // OTIMIZAÇÃO: Busca parcelas primeiro (1 requisição em vez de 2!)
+          const parcelas = await asaasService.getInstallmentPayments(venda.id);
+          
+          // Se não tem parcelas, pula
+          if (!parcelas || parcelas.length === 0) {
+            console.log('  ⚠️  Sem parcelas encontradas');
+            return null;
+          }
+
+          // Pega customer ID da primeira parcela (evita requisição extra!)
+          const customerId = parcelas[0].customer;
           
           // Busca informações do cliente (com cache)
           let cliente;
-          if (cacheClientes.has(parcelamento.customer)) {
-            cliente = cacheClientes.get(parcelamento.customer);
+          if (cacheClientes.has(customerId)) {
+            cliente = cacheClientes.get(customerId);
             console.log('  💾 Cliente encontrado no cache');
           } else {
-            cliente = await asaasService.getCustomer(parcelamento.customer);
-            cacheClientes.set(parcelamento.customer, cliente);
+            cliente = await asaasService.getCustomer(customerId);
+            cacheClientes.set(customerId, cliente);
           }
-
-          // Busca as parcelas do parcelamento
-          const parcelas = await asaasService.getInstallmentPayments(venda.id);
 
         // Classifica as parcelas por status
         const hoje = new Date();
