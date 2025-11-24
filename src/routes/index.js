@@ -4,6 +4,7 @@ const asaasRoutes = require('./asaasRoutes');
 const databaseRoutes = require('./databaseRoutes');
 const parcelamentoRoutes = require('./parcelamentoRoutes');
 const clientesRoutes = require('./clientesRoutes');
+const cadastroRapidoRoutes = require('./cadastroRapidoRoutes');
 
 // Rota principal
 router.get('/', (req, res) => {
@@ -38,6 +39,9 @@ router.get('/', (req, res) => {
 
 // Rotas de clientes
 router.use('/', clientesRoutes);
+
+// Rotas de cadastro rápido
+router.use('/', cadastroRapidoRoutes);
 
 // Rotas oficiais da API
 router.use('/', parcelamentoRoutes);
