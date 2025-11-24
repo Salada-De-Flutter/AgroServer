@@ -240,7 +240,7 @@ class AsaasService {
       
       // Se for 403 (Forbidden) ou 429 (Too Many Requests) e ainda tem retries
       if ((status === 403 || status === 429) && retries > 0) {
-        const waitTime = status === 429 ? 5000 : 3000; // 5s para 429, 3s para 403
+        const waitTime = status === 429 ? 500 : 300; // 500ms para 429, 300ms para 403
         console.log(`  ⏳ Rate limit atingido (${status}), aguardando ${waitTime}ms antes de tentar novamente...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
         return this.getInstallmentPayments(installmentId, retries - 1);
