@@ -1,5 +1,23 @@
 const axios = require('axios');
 
+// ===== ESTADO GLOBAL COMPARTILHADO =====
+// Todas as instâncias e requisições compartilham este estado
+// Resolve problema de múltiplos usuários/requisições simultâneas
+const GLOBAL_RATE_LIMIT = {
+  remaining: 999,
+  reset: 60,
+  limit: 140,
+  timestamp: Date.now(),
+  updateFromHeaders(headers) {
+    if (headers['ratelimit-remaining']) {
+      this.remaining = parseInt(headers['ratelimit-remaining'] || '999');
+      this.reset = parseInt(headers['ratelimit-reset'] || '60');
+      this.limit = parseInt(headers['ratelimit-limit'] || '140');
+      this.timestamp = Date.now();
+    }
+  }
+};
+
 class AsaasService {
   constructor() {
     this.apiKey = process.env.ASAAS_API_KEY;
@@ -20,58 +38,54 @@ class AsaasService {
     // Sistema de controle de rate limit
     this.requestCount = 0; // Contador de requisições
     this.rateLimitThreshold = 10; // Limite mínimo seguro (para de fazer requisições)
-    this.checkInterval = 5; // Verifica a cada 5 requisições
-    this.firstCheckDone = false; // Flag para verificação inicial
+    this.checkInterval = 20; // Verifica a cada 20 requisições (menos verificações = mais velocidade)
+    
+    // Interceptor que atualiza ESTADO GLOBAL de rate limit
+    this.client.interceptors.response.use(
+      (response) => {
+        // Atualiza estado global (compartilhado por TODOS)
+        GLOBAL_RATE_LIMIT.updateFromHeaders(response.headers);
+        return response;
+      },
+      (error) => {
+        // Atualiza estado global mesmo em erros
+        if (error.response?.headers) {
+          GLOBAL_RATE_LIMIT.updateFromHeaders(error.response.headers);
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   /**
-   * Verifica o rate limit da API consultando o endpoint /payments
+   * Verifica o rate limit usando ESTADO GLOBAL (instantâneo!)
    * Se remaining <= 10, aguarda o reset automaticamente
-   * IMPORTANTE: Esta função NÃO conta como requisição no contador
+   * IMPORTANTE: Usa estado compartilhado - atualizado por QUALQUER requisição
    */
   async checkRateLimit() {
-    try {
-      console.log('🔍 Verificando rate limit...');
-      const response = await this.client.get('/payments?limit=1');
-      
-      const remaining = parseInt(response.headers['ratelimit-remaining'] || '999');
-      const reset = parseInt(response.headers['ratelimit-reset'] || '60');
-      const limit = parseInt(response.headers['ratelimit-limit'] || '0');
+    const { remaining, reset, limit } = GLOBAL_RATE_LIMIT;
+    console.log(`📊 Rate Limit Global - Remaining: ${remaining}/${limit} | Reset em: ${reset}s`);
 
-      console.log(`📊 Rate Limit - Remaining: ${remaining}/${limit} | Reset em: ${reset}s`);
-
-      // Se remaining <= 10, espera o reset
-      if (remaining <= this.rateLimitThreshold) {
-        const waitTime = (reset + 2) * 1000; // Reset + 2s de segurança
-        console.log(`⚠️  Rate limit baixo (${remaining})! Aguardando ${reset + 2}s...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        console.log('✅ Rate limit resetado! Continuando...');
-      }
-
-      return { remaining, reset, limit };
-    } catch (error) {
-      console.log('⚠️  Erro ao verificar rate limit, continuando...');
-      return { remaining: 999, reset: 60, limit: 0 };
+    // Se remaining <= 10, espera o reset
+    if (remaining <= this.rateLimitThreshold) {
+      const waitTime = (reset + 2) * 1000; // Reset + 2s de segurança
+      console.log(`⚠️  Rate limit baixo (${remaining})! Aguardando ${reset + 2}s...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      console.log('✅ Rate limit resetado! Continuando...');
     }
+
+    return { remaining, reset, limit };
   }
 
   /**
    * Interceptor que verifica rate limit:
-   * - ANTES da primeira requisição (proteção inicial)
-   * - A cada 5 requisições (proteção contínua)
-   * Protege contra requisições concorrentes de outros usuários
+   * - A cada X requisições (proteção contínua)
+   * - USA CACHE dos headers (instantâneo, sem requisição extra!)
    */
   async beforeRequest() {
-    // VERIFICAÇÃO INICIAL: Antes da primeira requisição
-    if (!this.firstCheckDone) {
-      console.log('🔰 Primeira requisição - Verificando rate limit inicial...');
-      await this.checkRateLimit();
-      this.firstCheckDone = true;
-    }
-    
     this.requestCount++;
     
-    // VERIFICAÇÃO PERIÓDICA: A cada 5 requisições
+    // VERIFICAÇÃO PERIÓDICA: A cada X requisições
     if (this.requestCount % this.checkInterval === 0) {
       await this.checkRateLimit();
     }
