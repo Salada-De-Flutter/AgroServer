@@ -350,8 +350,8 @@ async function main() {
       erros: []
     };
 
-    // Processa em lotes de 5
-    const BATCH_SIZE = 5;
+    // Processa em lotes de 3 (mais seguro para rate limit)
+    const BATCH_SIZE = 3;
     for (let i = 0; i < CPFs.length; i += BATCH_SIZE) {
       const batch = CPFs.slice(i, i + BATCH_SIZE);
       
@@ -374,9 +374,9 @@ async function main() {
         }
       });
 
-      // Delay entre lotes
+      // Delay entre lotes (1 segundo para maior segurança)
       if (i + BATCH_SIZE < CPFs.length) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 

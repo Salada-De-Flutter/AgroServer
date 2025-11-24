@@ -16,6 +16,65 @@ class AsaasService {
         'Content-Type': 'application/json'
       }
     });
+
+    // Sistema de controle de rate limit
+    this.requestCount = 0; // Contador de requisições
+    this.rateLimitThreshold = 10; // Limite mínimo seguro (para de fazer requisições)
+    this.checkInterval = 5; // Verifica a cada 5 requisições
+    this.firstCheckDone = false; // Flag para verificação inicial
+  }
+
+  /**
+   * Verifica o rate limit da API consultando o endpoint /payments
+   * Se remaining <= 10, aguarda o reset automaticamente
+   * IMPORTANTE: Esta função NÃO conta como requisição no contador
+   */
+  async checkRateLimit() {
+    try {
+      console.log('🔍 Verificando rate limit...');
+      const response = await this.client.get('/payments?limit=1');
+      
+      const remaining = parseInt(response.headers['ratelimit-remaining'] || '999');
+      const reset = parseInt(response.headers['ratelimit-reset'] || '60');
+      const limit = parseInt(response.headers['ratelimit-limit'] || '0');
+
+      console.log(`📊 Rate Limit - Remaining: ${remaining}/${limit} | Reset em: ${reset}s`);
+
+      // Se remaining <= 10, espera o reset
+      if (remaining <= this.rateLimitThreshold) {
+        const waitTime = (reset + 2) * 1000; // Reset + 2s de segurança
+        console.log(`⚠️  Rate limit baixo (${remaining})! Aguardando ${reset + 2}s...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        console.log('✅ Rate limit resetado! Continuando...');
+      }
+
+      return { remaining, reset, limit };
+    } catch (error) {
+      console.log('⚠️  Erro ao verificar rate limit, continuando...');
+      return { remaining: 999, reset: 60, limit: 0 };
+    }
+  }
+
+  /**
+   * Interceptor que verifica rate limit:
+   * - ANTES da primeira requisição (proteção inicial)
+   * - A cada 5 requisições (proteção contínua)
+   * Protege contra requisições concorrentes de outros usuários
+   */
+  async beforeRequest() {
+    // VERIFICAÇÃO INICIAL: Antes da primeira requisição
+    if (!this.firstCheckDone) {
+      console.log('🔰 Primeira requisição - Verificando rate limit inicial...');
+      await this.checkRateLimit();
+      this.firstCheckDone = true;
+    }
+    
+    this.requestCount++;
+    
+    // VERIFICAÇÃO PERIÓDICA: A cada 5 requisições
+    if (this.requestCount % this.checkInterval === 0) {
+      await this.checkRateLimit();
+    }
   }
 
   /**
@@ -132,6 +191,9 @@ class AsaasService {
    * @returns {Promise<Object>}
    */
   async getInstallment(installmentId) {
+    // Verifica rate limit a cada 9 requisições
+    await this.beforeRequest();
+    
     try {
       const response = await this.client.get(`/installments/${installmentId}`);
       return response.data;
@@ -146,6 +208,9 @@ class AsaasService {
    * @returns {Promise<Object>}
    */
   async getCustomer(customerId) {
+    // Verifica rate limit a cada 9 requisições
+    await this.beforeRequest();
+    
     try {
       const response = await this.client.get(`/customers/${customerId}`);
       return response.data;
@@ -160,6 +225,9 @@ class AsaasService {
    * @returns {Promise<Array>}
    */
   async getInstallmentPayments(installmentId, retries = 3) {
+    // Verifica rate limit a cada 9 requisições
+    await this.beforeRequest();
+    
     try {
       const response = await this.client.get(`/payments`, {
         params: {
