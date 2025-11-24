@@ -350,13 +350,13 @@ async function main() {
       erros: []
     };
 
-    // Processa SEQUENCIALMENTE (1 por vez para evitar rate limit)
-    // Sistema de proteção verifica a cada 5 requisições
-    const BATCH_SIZE = 1;
+    // Processa em lotes de 5 (velocidade otimizada com proteção global)
+    // Sistema global verifica estado ANTES de cada requisição (instantâneo!)
+    const BATCH_SIZE = 5;
     for (let i = 0; i < CPFs.length; i += BATCH_SIZE) {
       const batch = CPFs.slice(i, i + BATCH_SIZE);
       
-      console.log(`📦 Processando CPF ${i + 1}/${CPFs.length}...`);
+      console.log(`📦 Processando lote ${Math.floor(i / BATCH_SIZE) + 1} (CPFs ${i + 1}-${Math.min(i + BATCH_SIZE, CPFs.length)})...`);
       
       const batchResults = await Promise.all(
         batch.map(cpf => processarCPF(cpf, rotaEscolhida.id, client))

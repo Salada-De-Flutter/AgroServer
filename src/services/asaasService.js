@@ -61,15 +61,17 @@ class AsaasService {
    * Verifica o rate limit usando ESTADO GLOBAL (instantâneo!)
    * Se remaining <= 10, aguarda o reset automaticamente
    * IMPORTANTE: Usa estado compartilhado - atualizado por QUALQUER requisição
+   * USA O RESET DA VARIÁVEL GLOBAL para saber quanto tempo aguardar
    */
   async checkRateLimit() {
+    // Lê valores ATUALIZADOS da variável global (última requisição de qualquer usuário)
     const { remaining, reset, limit } = GLOBAL_RATE_LIMIT;
     console.log(`📊 Rate Limit Global - Remaining: ${remaining}/${limit} | Reset em: ${reset}s`);
 
-    // Se remaining <= 10, espera o reset
+    // Se remaining <= 10, aguarda o tempo de reset da variável global
     if (remaining <= this.rateLimitThreshold) {
-      const waitTime = (reset + 2) * 1000; // Reset + 2s de segurança
-      console.log(`⚠️  Rate limit baixo (${remaining})! Aguardando ${reset + 2}s...`);
+      const waitTime = (reset + 2) * 1000; // Usa reset global + 2s de segurança
+      console.log(`⚠️  Rate limit baixo (${remaining})! Aguardando ${reset + 2}s (reset global)...`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
       console.log('✅ Rate limit resetado! Continuando...');
     }
@@ -78,16 +80,21 @@ class AsaasService {
   }
 
   /**
-   * Interceptor que verifica rate limit:
-   * - A cada X requisições (proteção contínua)
-   * - USA CACHE dos headers (instantâneo, sem requisição extra!)
+   * Interceptor que verifica rate limit ANTES DE CADA REQUISIÇÃO
+   * - Lê estado global (instantâneo, 0ms!)
+   * - Se remaining <= 10, aguarda reset automaticamente
+   * - Protege contra múltiplos usuários
    */
   async beforeRequest() {
     this.requestCount++;
     
-    // VERIFICAÇÃO PERIÓDICA: A cada X requisições
-    if (this.requestCount % this.checkInterval === 0) {
-      await this.checkRateLimit();
+    // VERIFICAÇÃO ANTES DE CADA REQUISIÇÃO (instantânea via estado global)
+    const { remaining } = GLOBAL_RATE_LIMIT;
+    
+    // Se remaining está baixo, aguarda reset
+    if (remaining <= this.rateLimitThreshold) {
+      console.log(`⚠️  Rate limit baixo (${remaining})! Aguardando antes de fazer requisição...`);
+      await this.checkRateLimit(); // Aguarda o reset
     }
   }
 
