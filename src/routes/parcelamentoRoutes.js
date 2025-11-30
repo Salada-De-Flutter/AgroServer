@@ -73,7 +73,7 @@ router.post('/rota/vendas', async (req, res) => {
     const vendaIds = vendasResult.rows.map(v => v.id);
     // Busca todas as cobranças desses parcelamentos
     const cobrancasResult = await databaseService.query(
-      `SELECT c.*, cl.nome as cliente_nome, cl.id as cliente_id
+      `SELECT c.*, cl.nome as cliente_nome, cl.id as cliente_id, cl.celular as cliente_celular
          FROM cobrancas c
          JOIN clientes cl ON cl.id = c.cliente_id
          WHERE c.parcelamento_id = ANY($1)
@@ -105,6 +105,7 @@ router.post('/rota/vendas', async (req, res) => {
       }
       const clienteId = cobrancas[0].cliente_id;
       const nomeCliente = cobrancas[0].cliente_nome;
+      const celular = cobrancas[0].cliente_celular || '';
       // Classificação das parcelas
       const hoje = new Date();
       const statusPagos = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
@@ -148,6 +149,7 @@ router.post('/rota/vendas', async (req, res) => {
         parcelamentoId,
         clienteId,
         nomeCliente,
+        celular,
         status: statusGeral,
         parcelasVencidas: {
           quantidade: parcelasVencidas.length,

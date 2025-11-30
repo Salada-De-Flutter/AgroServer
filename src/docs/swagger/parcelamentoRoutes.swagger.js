@@ -53,6 +53,9 @@
  *                         type: string
  *                       nomeCliente:
  *                         type: string
+ *                       celular:
+ *                         type: string
+ *                         description: Celular do cliente
  *                       status:
  *                         type: string
  *                       parcelasVencidas:
