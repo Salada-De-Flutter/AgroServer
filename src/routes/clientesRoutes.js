@@ -21,47 +21,51 @@ router.get('/clientes/listar', async (req, res) => {
       console.log(`\n🔍 Buscando clientes - Página ${page} (${limit} por página)...`);
     }
 
-    // Monta parâmetros para a API do Asaas
-    const params = {
-      limit: limit,
-      offset: offset
-    };
 
-    // Se houver termo de busca, adiciona aos parâmetros
-    // A API do Asaas aceita 'name' para buscar por nome
+    // Monta query SQL dinâmica para busca
+    let whereClause = '';
+    let values = [];
     if (search) {
-      // Verifica se é CPF/CNPJ (apenas números)
       const apenasNumeros = search.replace(/\D/g, '');
-      
       if (apenasNumeros.length >= 11) {
-        // Se tiver 11+ dígitos, busca por CPF/CNPJ
-        params.cpfCnpj = apenasNumeros;
+        // Busca por CPF/CNPJ
+        whereClause = 'WHERE cpf_cnpj ILIKE $1';
+        values.push(`%${apenasNumeros}%`);
         console.log(`   📋 Buscando por CPF/CNPJ: ${apenasNumeros}`);
       } else {
-        // Senão, busca por nome
-        params.name = search;
+        // Busca por nome
+        whereClause = 'WHERE nome ILIKE $1';
+        values.push(`%${search}%`);
         console.log(`   👤 Buscando por nome: ${search}`);
       }
     }
 
-    // Busca clientes do Asaas com paginação e filtro
-    const response = await asaasService.listCustomers(params);
+    // Conta total de clientes para paginação
+    const countQuery = `SELECT COUNT(*) AS total FROM clientes ${whereClause}`;
+    const countResult = await databaseService.query(countQuery, values);
+    const totalCount = parseInt(countResult.rows[0].total);
 
-    const clientes = response.data || [];
-    const hasMore = response.hasMore || false;
-    const totalCount = response.totalCount || 0;
-
-    console.log(`✅ ${clientes.length} cliente(s) encontrado(s)\n`);
+    // Busca clientes paginados
+    const clientesQuery = `
+      SELECT id, nome, cpf_cnpj, email, telefone, celular, cidade_nome, estado
+      FROM clientes
+      ${whereClause}
+      ORDER BY nome ASC
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+    `;
+    const clientesResult = await databaseService.query(clientesQuery, [...values, limit, offset]);
+    const clientes = clientesResult.rows;
+    const hasMore = offset + clientes.length < totalCount;
 
     // Formata a resposta para o frontend
     const clientesFormatados = clientes.map(cliente => ({
       id: cliente.id,
-      nome: cliente.name,
-      cpfCnpj: cliente.cpfCnpj || 'Não informado',
+      nome: cliente.nome,
+      cpfCnpj: cliente.cpf_cnpj || 'Não informado',
       email: cliente.email || 'Não informado',
-      telefone: cliente.mobilePhone || cliente.phone || 'Não informado',
-      cidade: cliente.city || '',
-      estado: cliente.state || ''
+      telefone: cliente.celular || cliente.telefone || 'Não informado',
+      cidade: cliente.cidade_nome || '',
+      estado: cliente.estado || ''
     }));
 
     res.json({
@@ -98,25 +102,40 @@ router.get('/clientes/:cliente_id/parcelamentos', async (req, res) => {
 
     console.log(`\n🔍 Buscando parcelamentos do cliente: ${cliente_id}`);
 
-    // Busca informações do cliente
-    const cliente = await asaasService.getCustomer(cliente_id);
-    
-    // Busca parcelamentos do cliente
-    const installmentsResponse = await asaasService.client.get('/installments', {
-      params: { customer: cliente_id }
-    });
 
-    const parcelamentos = installmentsResponse.data.data || [];
+    // Busca informações do cliente no banco
+    const clienteResult = await databaseService.query(
+      'SELECT id, nome, cpf_cnpj FROM clientes WHERE id = $1',
+      [cliente_id]
+    );
+    if (clienteResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente não encontrado'
+      });
+    }
+    const cliente = clienteResult.rows[0];
 
-    console.log(`✅ ${parcelamentos.length} parcelamento(s) encontrado(s)\n`);
+    // Busca parcelamentos (vendas) do cliente
+    // Considera que cada venda é um parcelamento, agrupando por id de parcelamento
+    // Busca na tabela cobrancas as cobranças do cliente que possuem parcelamento_id
+    const parcelamentosResult = await databaseService.query(
+      `SELECT DISTINCT parcelamento_id, MIN(data_criacao) as data_criacao, SUM(valor) as valor_total, COUNT(*) as numero_parcelas, MAX(descricao) as descricao, MAX(status) as status
+       FROM cobrancas
+       WHERE cliente_id = $1 AND parcelamento_id IS NOT NULL
+       GROUP BY parcelamento_id
+       ORDER BY data_criacao DESC`,
+      [cliente_id]
+    );
+    const parcelamentos = parcelamentosResult.rows;
 
     // Formata parcelamentos para o frontend
     const parcelamentosFormatados = parcelamentos.map(p => ({
-      id: p.id,
-      valor: p.value,
-      numeroParcelas: p.installmentCount,
-      descricao: p.description || 'Sem descrição',
-      dataCriacao: p.dateCreated,
+      id: p.parcelamento_id,
+      valor: Number(p.valor_total),
+      numeroParcelas: Number(p.numero_parcelas),
+      descricao: p.descricao || 'Sem descrição',
+      dataCriacao: p.data_criacao,
       status: p.status
     }));
 
@@ -124,8 +143,8 @@ router.get('/clientes/:cliente_id/parcelamentos', async (req, res) => {
       success: true,
       cliente: {
         id: cliente.id,
-        nome: cliente.name,
-        cpfCnpj: cliente.cpfCnpj
+        nome: cliente.nome,
+        cpfCnpj: cliente.cpf_cnpj
       },
       parcelamentos: parcelamentosFormatados
     });
