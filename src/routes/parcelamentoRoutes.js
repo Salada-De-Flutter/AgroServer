@@ -71,6 +71,17 @@ router.post('/rota/vendas', async (req, res) => {
 
     // Busca todos os dados necessários em lote para máxima performance
     const vendaIds = vendasResult.rows.map(v => v.id);
+    
+    // Busca vendas com boleto_parcelamento
+    const vendasComBoletoResult = await databaseService.query(
+      'SELECT id, boleto_parcelamento FROM vendas WHERE id = ANY($1)',
+      [vendaIds]
+    );
+    const linksBoletoMap = {};
+    vendasComBoletoResult.rows.forEach(v => {
+      linksBoletoMap[v.id] = v.boleto_parcelamento;
+    });
+    
     // Busca todas as cobranças desses parcelamentos
     const cobrancasResult = await databaseService.query(
       `SELECT c.*, cl.nome as cliente_nome, cl.id as cliente_id, cl.celular as cliente_celular
@@ -151,6 +162,7 @@ router.post('/rota/vendas', async (req, res) => {
         nomeCliente,
         celular,
         status: statusGeral,
+        boletoParcelamento: linksBoletoMap[parcelamentoId] || null,
         parcelasVencidas: {
           quantidade: parcelasVencidas.length,
           valor: parcelasVencidas.reduce((acc, p) => acc + p.valor, 0),
