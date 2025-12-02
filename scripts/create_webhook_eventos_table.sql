@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_eventos_evento ON webhook_eventos(evento)
 CREATE INDEX IF NOT EXISTS idx_webhook_eventos_recebido_em ON webhook_eventos(recebido_em DESC);
 
 -- Índice para consultas por payment ID no payload
-CREATE INDEX IF NOT EXISTS idx_webhook_eventos_payment_id ON webhook_eventos((payload->>'payment'->>'id'));
+CREATE INDEX IF NOT EXISTS idx_webhook_eventos_payment_id ON webhook_eventos((payload->'payment'->>'id'));
 
 -- Comentários
 COMMENT ON TABLE webhook_eventos IS 'Armazena todos os eventos de webhook recebidos do Asaas';

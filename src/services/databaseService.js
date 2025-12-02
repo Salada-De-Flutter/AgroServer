@@ -99,6 +99,193 @@ class DatabaseService {
       waitingCount: this.pool.waitingCount
     };
   }
+
+  // ==========================================
+  // MÉTODOS PARA WEBHOOK
+  // ==========================================
+
+  /**
+   * Registra evento de webhook na tabela webhook_eventos
+   * @param {string} evento - Tipo do evento (ex: PAYMENT_RECEIVED)
+   * @param {Object} payload - Dados completos do evento
+   */
+  async registrarWebhookEvento(evento, payload) {
+    const query = `
+      INSERT INTO webhook_eventos (evento, payload, recebido_em)
+      VALUES ($1, $2, NOW())
+      RETURNING id
+    `;
+    const result = await this.query(query, [evento, JSON.stringify(payload)]);
+    return result.rows[0];
+  }
+
+  /**
+   * Busca cliente por ID do Asaas
+   * @param {string} clienteId - ID do cliente no Asaas
+   */
+  async buscarClientePorId(clienteId) {
+    const query = 'SELECT * FROM clientes WHERE id = $1';
+    const result = await this.query(query, [clienteId]);
+    return result.rows[0];
+  }
+
+  /**
+   * Cria novo cliente
+   * @param {Object} cliente - Dados do cliente do Asaas
+   */
+  async criarCliente(cliente) {
+    const query = `
+      INSERT INTO clientes (
+        id, nome, email, cpf_cnpj, telefone, celular,
+        endereco, numero, complemento, bairro, cidade, estado, cep,
+        criado_em, atualizado_em
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    `;
+    const result = await this.query(query, [
+      cliente.id,
+      cliente.name,
+      cliente.email,
+      cliente.cpfCnpj,
+      cliente.phone,
+      cliente.mobilePhone,
+      cliente.address,
+      cliente.addressNumber,
+      cliente.complement,
+      cliente.province,
+      cliente.city || cliente.cityName,
+      cliente.state,
+      cliente.postalCode
+    ]);
+    return result.rows[0];
+  }
+
+  /**
+   * Atualiza cliente existente
+   * @param {string} clienteId - ID do cliente
+   * @param {Object} cliente - Dados atualizados do cliente
+   */
+  async atualizarCliente(clienteId, cliente) {
+    const query = `
+      UPDATE clientes SET
+        nome = $2,
+        email = $3,
+        cpf_cnpj = $4,
+        telefone = $5,
+        celular = $6,
+        endereco = $7,
+        numero = $8,
+        complemento = $9,
+        bairro = $10,
+        cidade = $11,
+        estado = $12,
+        cep = $13,
+        atualizado_em = NOW()
+      WHERE id = $1
+      RETURNING id
+    `;
+    const result = await this.query(query, [
+      clienteId,
+      cliente.name,
+      cliente.email,
+      cliente.cpfCnpj,
+      cliente.phone,
+      cliente.mobilePhone,
+      cliente.address,
+      cliente.addressNumber,
+      cliente.complement,
+      cliente.province,
+      cliente.city || cliente.cityName,
+      cliente.state,
+      cliente.postalCode
+    ]);
+    return result.rows[0];
+  }
+
+  /**
+   * Busca cobrança por ID do Asaas
+   * @param {string} cobrancaId - ID da cobrança no Asaas
+   */
+  async buscarCobrancaPorId(cobrancaId) {
+    const query = 'SELECT * FROM cobrancas WHERE id = $1';
+    const result = await this.query(query, [cobrancaId]);
+    return result.rows[0];
+  }
+
+  /**
+   * Cria nova cobrança
+   * @param {Object} payment - Dados do pagamento do Asaas
+   */
+  async criarCobranca(payment) {
+    const query = `
+      INSERT INTO cobrancas (
+        id, cliente_id, valor, status, forma_pagamento,
+        data_vencimento, data_pagamento, descricao, url_fatura,
+        parcelamento_id, numero_parcela, total_parcelas,
+        criado_em, atualizado_em
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    `;
+    const result = await this.query(query, [
+      payment.id,
+      payment.customer,
+      payment.value,
+      payment.status,
+      payment.billingType,
+      payment.dueDate,
+      payment.paymentDate || payment.clientPaymentDate,
+      payment.description,
+      payment.invoiceUrl,
+      payment.installment,
+      payment.installmentNumber,
+      payment.installmentCount
+    ]);
+    return result.rows[0];
+  }
+
+  /**
+   * Atualiza cobrança existente
+   * @param {string} cobrancaId - ID da cobrança
+   * @param {Object} payment - Dados atualizados do pagamento
+   */
+  async atualizarCobranca(cobrancaId, payment) {
+    const query = `
+      UPDATE cobrancas SET
+        cliente_id = $2,
+        valor = $3,
+        status = $4,
+        forma_pagamento = $5,
+        data_vencimento = $6,
+        data_pagamento = $7,
+        descricao = $8,
+        url_fatura = $9,
+        parcelamento_id = $10,
+        numero_parcela = $11,
+        total_parcelas = $12,
+        atualizado_em = NOW()
+      WHERE id = $1
+      RETURNING id
+    `;
+    const result = await this.query(query, [
+      cobrancaId,
+      payment.customer,
+      payment.value,
+      payment.status,
+      payment.billingType,
+      payment.dueDate,
+      payment.paymentDate || payment.clientPaymentDate,
+      payment.description,
+      payment.invoiceUrl,
+      payment.installment,
+      payment.installmentNumber,
+      payment.installmentCount
+    ]);
+    return result.rows[0];
+  }
 }
 
 module.exports = new DatabaseService();
