@@ -137,7 +137,7 @@ class DatabaseService {
     const query = `
       INSERT INTO clientes (
         id, nome, email, cpf_cnpj, telefone, celular,
-        endereco, numero, complemento, bairro, cidade, estado, cep,
+        endereco, numero_endereco, complemento, bairro, cidade_nome, estado, cep,
         criado_em, atualizado_em
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
@@ -176,10 +176,10 @@ class DatabaseService {
         telefone = $5,
         celular = $6,
         endereco = $7,
-        numero = $8,
+        numero_endereco = $8,
         complemento = $9,
         bairro = $10,
-        cidade = $11,
+        cidade_nome = $11,
         estado = $12,
         cep = $13,
         atualizado_em = NOW()
@@ -221,12 +221,12 @@ class DatabaseService {
   async criarCobranca(payment) {
     const query = `
       INSERT INTO cobrancas (
-        id, cliente_id, valor, status, forma_pagamento,
+        id, cliente_id, valor, status, forma_cobranca,
         data_vencimento, data_pagamento, descricao, url_fatura,
-        parcelamento_id, numero_parcela, total_parcelas,
+        parcelamento_id, numero_parcela,
         criado_em, atualizado_em
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
       RETURNING id
     `;
@@ -241,8 +241,7 @@ class DatabaseService {
       payment.description,
       payment.invoiceUrl,
       payment.installment,
-      payment.installmentNumber,
-      payment.installmentCount
+      payment.installmentNumber
     ]);
     return result.rows[0];
   }
@@ -258,14 +257,13 @@ class DatabaseService {
         cliente_id = $2,
         valor = $3,
         status = $4,
-        forma_pagamento = $5,
+        forma_cobranca = $5,
         data_vencimento = $6,
         data_pagamento = $7,
         descricao = $8,
         url_fatura = $9,
         parcelamento_id = $10,
         numero_parcela = $11,
-        total_parcelas = $12,
         atualizado_em = NOW()
       WHERE id = $1
       RETURNING id
@@ -281,8 +279,7 @@ class DatabaseService {
       payment.description,
       payment.invoiceUrl,
       payment.installment,
-      payment.installmentNumber,
-      payment.installmentCount
+      payment.installmentNumber
     ]);
     return result.rows[0];
   }
