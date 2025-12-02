@@ -2,6 +2,7 @@ require('dotenv').config();
 const app = require('./app');
 const asaasService = require('./services/asaasService');
 const databaseService = require('./services/databaseService');
+const webhookService = require('./services/webhookService');
 
 const PORT = process.env.PORT || 3000;
 
@@ -38,6 +39,33 @@ async function testAsaasConnection() {
   console.log('');
 }
 
+// Função para configurar webhook do Asaas
+async function setupAsaasWebhook() {
+  console.log('🔗 Configurando webhook do Asaas...');
+  
+  if (!process.env.WEBHOOK_URL) {
+    console.error('⚠️  WEBHOOK_URL não configurada no .env - webhook não será criado');
+    console.error('   Configure WEBHOOK_URL com a URL pública do webhook (ex: https://agroserver-it9g.onrender.com/api/webhook/asaas)');
+    console.log('');
+    return;
+  }
+  
+  try {
+    const resultado = await webhookService.criarWebhook();
+    
+    if (resultado) {
+      console.log('✅ Webhook criado com sucesso!');
+      console.log(`   🔗 URL: ${resultado.url}`);
+      console.log(`   📋 Nome: ${resultado.name}`);
+      console.log(`   📊 Eventos: ${resultado.events.length} eventos configurados`);
+    }
+  } catch (error) {
+    console.error('❌ Erro ao configurar webhook:', error.message);
+    console.error('⚠️  O servidor continuará rodando, mas eventos do Asaas não serão recebidos.');
+  }
+  console.log('');
+}
+
 app.listen(PORT, async () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
@@ -46,4 +74,5 @@ app.listen(PORT, async () => {
   // Testa conexões após o servidor iniciar
   await testDatabaseConnection();
   await testAsaasConnection();
+  await setupAsaasWebhook();
 });

@@ -5,6 +5,7 @@ const databaseRoutes = require('./databaseRoutes');
 const parcelamentoRoutes = require('./parcelamentoRoutes');
 const clientesRoutes = require('./clientesRoutes');
 const cadastroRapidoRoutes = require('./cadastroRapidoRoutes');
+const webhookRoutes = require('./webhookRoutes');
 
 // Rota principal
 router.get('/', (req, res) => {
@@ -51,6 +52,9 @@ router.use('/', databaseRoutes);
 
 // Rotas do Asaas
 router.use('/', asaasRoutes);
+
+// Rotas de webhook
+router.use('/webhook', webhookRoutes);
 
 // Exemplo de rota com parâmetros
 router.get('/example/:id', (req, res) => {

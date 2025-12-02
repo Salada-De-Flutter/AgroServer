@@ -129,6 +129,39 @@ GET /api/database/tables
 ```
 Lista todas as tabelas do schema público.
 
+### Webhooks - Asaas
+```
+POST /api/webhook/asaas
+```
+Recebe eventos de pagamento do Asaas para sincronização automática.
+
+> 📚 **Documentação completa:** [docs/WEBHOOKS.md](docs/WEBHOOKS.md)
+
+## 🔗 Sistema de Webhooks
+
+O sistema possui sincronização automática com o Asaas via webhooks:
+
+- ✅ **Auto-configuração**: Webhook criado automaticamente ao iniciar o servidor
+- ✅ **Eventos em tempo real**: Recebe notificações instantâneas de pagamentos
+- ✅ **Sincronização automática**: Atualiza clientes e cobranças no banco local
+- ✅ **Registro completo**: Todos os eventos salvos em `webhook_eventos`
+
+**Configuração rápida:**
+
+1. Adicione `SERVER_URL` no `.env`:
+   ```env
+   SERVER_URL=https://seu-servidor.com
+   ```
+
+2. Inicie o servidor:
+   ```bash
+   npm start
+   ```
+
+3. Pronto! O webhook será criado automaticamente.
+
+Para mais detalhes, consulte [docs/WEBHOOKS.md](docs/WEBHOOKS.md).
+
 ## 🛠️ Tecnologias Utilizadas
 
 - **Express** - Framework web
