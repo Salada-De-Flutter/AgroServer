@@ -1,0 +1,75 @@
+### ==============================================
+### API DE DASHBOARD - MÉTRICAS
+### ==============================================
+
+@baseUrl = http://localhost:3000/api
+@prodUrl = https://agroserver-it9g.onrender.com/api
+
+### ------------------------------------------
+### POST /dashboard/metricas - Com período específico
+### ------------------------------------------
+POST {{baseUrl}}/dashboard/metricas
+Content-Type: application/json
+
+{
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+  "data_inicio": "2025-01-01",
+  "data_fim": "2025-12-31"
+}
+
+### ------------------------------------------
+### POST /dashboard/metricas - Período padrão (mês atual)
+### ------------------------------------------
+POST {{baseUrl}}/dashboard/metricas
+Content-Type: application/json
+
+{
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+### ------------------------------------------
+### POST /dashboard/metricas - Somente ano atual
+### ------------------------------------------
+POST {{baseUrl}}/dashboard/metricas
+Content-Type: application/json
+
+{
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+  "data_inicio": "2025-01-01",
+  "data_fim": "2025-12-31"
+}
+
+### ------------------------------------------
+### POST /dashboard/metricas - Último trimestre
+### ------------------------------------------
+POST {{baseUrl}}/dashboard/metricas
+Content-Type: application/json
+
+{
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+  "data_inicio": "2025-10-01",
+  "data_fim": "2025-12-31"
+}
+
+### ------------------------------------------
+### POST /dashboard/metricas - Produção
+### ------------------------------------------
+POST {{prodUrl}}/dashboard/metricas
+Content-Type: application/json
+
+{
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+  "data_inicio": "2025-01-01",
+  "data_fim": "2025-12-31"
+}
+
+### ------------------------------------------
+### POST /dashboard/metricas - Erro: sem usuario_id
+### ------------------------------------------
+POST {{baseUrl}}/dashboard/metricas
+Content-Type: application/json
+
+{
+  "data_inicio": "2025-01-01",
+  "data_fim": "2025-12-31"
+}

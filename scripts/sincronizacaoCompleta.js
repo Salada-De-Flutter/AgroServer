@@ -3,6 +3,7 @@ const asaasService = require('../src/services/asaasService');
 const databaseService = require('../src/services/databaseService');
 
 /**
+ * 
  * ============================================
  * SCRIPT DE SINCRONIZAÇÃO COMPLETA ASAAS → DATABASE
  * ============================================
