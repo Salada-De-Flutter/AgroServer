@@ -84,30 +84,31 @@ async function calcularMetricasFinanceiras(dataInicio, dataFim) {
   const query = `
     SELECT
       -- Faturamento Total (todas as parcelas)
-      COALESCE(SUM(valor), 0) as faturamento_total,
+      COALESCE(SUM(c.valor), 0) as faturamento_total,
       
       -- Receita Recebida (pagas)
       COALESCE(SUM(CASE 
-        WHEN status IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH') 
-        THEN valor ELSE 0 
+        WHEN c.status IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH') 
+        THEN c.valor ELSE 0 
       END), 0) as receita_recebida,
       
       -- Receita a Receber (não vencidas e não pagas)
       COALESCE(SUM(CASE 
-        WHEN data_vencimento > $1 
-        AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-        THEN valor ELSE 0 
+        WHEN c.data_vencimento > $1 
+        AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+        THEN c.valor ELSE 0 
       END), 0) as receita_a_receber,
       
       -- Receita Vencida (vencidas e não pagas)
       COALESCE(SUM(CASE 
-        WHEN data_vencimento <= $1 
-        AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-        THEN valor ELSE 0 
+        WHEN c.data_vencimento <= $1 
+        AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+        THEN c.valor ELSE 0 
       END), 0) as receita_vencida
       
-    FROM cobrancas
-    WHERE deletado IS NOT TRUE
+    FROM cobrancas c
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    WHERE (c.deletado IS NULL OR c.deletado = false)
   `;
   
   const result = await databaseService.query(query, [hoje]);
@@ -144,13 +145,14 @@ async function calcularIndicadoresOperacionais(dataInicio, dataFim) {
       COUNT(DISTINCT c.cliente_id) as total_clientes,
       
       -- Total de vendas (parcelamentos distintos)
-      COUNT(DISTINCT c.parcelamento_id) FILTER (WHERE c.parcelamento_id IS NOT NULL) as total_vendas,
+      COUNT(DISTINCT v.id) as total_vendas,
       
       -- Faturamento total para calcular ticket médio
       COALESCE(SUM(c.valor), 0) as faturamento_total
       
     FROM cobrancas c
-    WHERE c.deletado IS NOT TRUE
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    WHERE (c.deletado IS NULL OR c.deletado = false)
   `;
   
   const result = await databaseService.query(query);
@@ -159,10 +161,11 @@ async function calcularIndicadoresOperacionais(dataInicio, dataFim) {
   // Clientes novos no mês atual
   const primeiroDiaMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
   const clientesNovosQuery = `
-    SELECT COUNT(DISTINCT cliente_id) as novos_clientes
-    FROM cobrancas
-    WHERE criado_em >= $1
-      AND deletado IS NOT TRUE
+    SELECT COUNT(DISTINCT c.cliente_id) as novos_clientes
+    FROM cobrancas c
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    WHERE c.criado_em >= $1
+      AND (c.deletado IS NULL OR c.deletado = false)
   `;
   const clientesNovosResult = await databaseService.query(clientesNovosQuery, [primeiroDiaMes]);
   
@@ -214,34 +217,35 @@ async function calcularAnaliseParcelas(dataInicio, dataFim) {
     SELECT
       -- Parcelas Pagas
       COUNT(*) FILTER (
-        WHERE status IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+        WHERE c.status IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ) as pagas_qtd,
-      COALESCE(SUM(valor) FILTER (
-        WHERE status IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+      COALESCE(SUM(c.valor) FILTER (
+        WHERE c.status IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ), 0) as pagas_valor,
       
       -- Parcelas a Vencer
       COUNT(*) FILTER (
-        WHERE data_vencimento > $1
-        AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+        WHERE c.data_vencimento > $1
+        AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ) as a_vencer_qtd,
-      COALESCE(SUM(valor) FILTER (
-        WHERE data_vencimento > $1
-        AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+      COALESCE(SUM(c.valor) FILTER (
+        WHERE c.data_vencimento > $1
+        AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ), 0) as a_vencer_valor,
       
       -- Parcelas Vencidas
       COUNT(*) FILTER (
-        WHERE data_vencimento <= $1
-        AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+        WHERE c.data_vencimento <= $1
+        AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ) as vencidas_qtd,
-      COALESCE(SUM(valor) FILTER (
-        WHERE data_vencimento <= $1
-        AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+      COALESCE(SUM(c.valor) FILTER (
+        WHERE c.data_vencimento <= $1
+        AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ), 0) as vencidas_valor
       
-    FROM cobrancas
-    WHERE deletado IS NOT TRUE
+    FROM cobrancas c
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    WHERE (c.deletado IS NULL OR c.deletado = false)
   `;
   
   const result = await databaseService.query(query, [hoje]);
@@ -273,20 +277,22 @@ async function calcularAlertas() {
   // Parcelas vencendo hoje
   const vencendoHojeQuery = `
     SELECT COUNT(*) as total
-    FROM cobrancas
-    WHERE data_vencimento = $1
-      AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-      AND (deletado IS NULL OR deletado = false)
+    FROM cobrancas c
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    WHERE c.data_vencimento = $1
+      AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+      AND (c.deletado IS NULL OR c.deletado = false)
   `;
   const vencendoHojeResult = await databaseService.query(vencendoHojeQuery, [hoje]);
   
   // Clientes com atraso de 30+ dias
   const atraso30DiasQuery = `
-    SELECT COUNT(DISTINCT cliente_id) as total
-    FROM cobrancas
-    WHERE data_vencimento <= $1
-      AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-      AND (deletado IS NULL OR deletado = false)
+    SELECT COUNT(DISTINCT c.cliente_id) as total
+    FROM cobrancas c
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    WHERE c.data_vencimento <= $1
+      AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
+      AND (c.deletado IS NULL OR c.deletado = false)
   `;
   const atraso30DiasResult = await databaseService.query(atraso30DiasQuery, [trintaDiasAtras]);
   
@@ -297,7 +303,8 @@ async function calcularAlertas() {
       cl.nome as "nomeCliente",
       SUM(c.valor) as "valorDevido"
     FROM cobrancas c
-    JOIN clientes cl ON cl.id = c.cliente_id
+    INNER JOIN vendas v ON v.id = c.parcelamento_id
+    INNER JOIN clientes cl ON cl.id = c.cliente_id
     WHERE c.data_vencimento <= $1
       AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       AND (c.deletado IS NULL OR c.deletado = false)
