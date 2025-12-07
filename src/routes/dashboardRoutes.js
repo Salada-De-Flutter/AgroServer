@@ -94,24 +94,23 @@ async function calcularMetricasFinanceiras(dataInicio, dataFim) {
       
       -- Receita a Receber (não vencidas e não pagas)
       COALESCE(SUM(CASE 
-        WHEN data_vencimento > $3 
+        WHEN data_vencimento > $1 
         AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
         THEN valor ELSE 0 
       END), 0) as receita_a_receber,
       
       -- Receita Vencida (vencidas e não pagas)
       COALESCE(SUM(CASE 
-        WHEN data_vencimento <= $3 
+        WHEN data_vencimento <= $1 
         AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
         THEN valor ELSE 0 
       END), 0) as receita_vencida
       
     FROM cobrancas
-    WHERE data_criacao >= $1 AND data_criacao <= $2
-      AND deletado IS NOT TRUE
+    WHERE deletado IS NOT TRUE
   `;
   
-  const result = await databaseService.query(query, [dataInicio, dataFim, hoje]);
+  const result = await databaseService.query(query, [hoje]);
   const row = result.rows[0];
   
   const faturamentoTotal = parseFloat(row.faturamento_total) || 0;
@@ -151,11 +150,10 @@ async function calcularIndicadoresOperacionais(dataInicio, dataFim) {
       COALESCE(SUM(c.valor), 0) as faturamento_total
       
     FROM cobrancas c
-    WHERE c.data_criacao >= $1 AND c.data_criacao <= $2
-      AND c.deletado IS NOT TRUE
+    WHERE c.deletado IS NOT TRUE
   `;
   
-  const result = await databaseService.query(query, [dataInicio, dataFim]);
+  const result = await databaseService.query(query);
   const row = result.rows[0];
   
   // Clientes novos no mês atual
@@ -163,7 +161,7 @@ async function calcularIndicadoresOperacionais(dataInicio, dataFim) {
   const clientesNovosQuery = `
     SELECT COUNT(DISTINCT cliente_id) as novos_clientes
     FROM cobrancas
-    WHERE data_criacao >= $1
+    WHERE criado_em >= $1
       AND deletado IS NOT TRUE
   `;
   const clientesNovosResult = await databaseService.query(clientesNovosQuery, [primeiroDiaMes]);
@@ -224,30 +222,29 @@ async function calcularAnaliseParcelas(dataInicio, dataFim) {
       
       -- Parcelas a Vencer
       COUNT(*) FILTER (
-        WHERE data_vencimento > $3
+        WHERE data_vencimento > $1
         AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ) as a_vencer_qtd,
       COALESCE(SUM(valor) FILTER (
-        WHERE data_vencimento > $3
+        WHERE data_vencimento > $1
         AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ), 0) as a_vencer_valor,
       
       -- Parcelas Vencidas
       COUNT(*) FILTER (
-        WHERE data_vencimento <= $3
+        WHERE data_vencimento <= $1
         AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ) as vencidas_qtd,
       COALESCE(SUM(valor) FILTER (
-        WHERE data_vencimento <= $3
+        WHERE data_vencimento <= $1
         AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
       ), 0) as vencidas_valor
       
     FROM cobrancas
-    WHERE data_criacao >= $1 AND data_criacao <= $2
-      AND deletado IS NOT TRUE
+    WHERE deletado IS NOT TRUE
   `;
   
-  const result = await databaseService.query(query, [dataInicio, dataFim, hoje]);
+  const result = await databaseService.query(query, [hoje]);
   const row = result.rows[0];
   
   return {
@@ -279,7 +276,7 @@ async function calcularAlertas() {
     FROM cobrancas
     WHERE data_vencimento = $1
       AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-      AND deletado IS NOT TRUE
+      AND (deletado IS NULL OR deletado = false)
   `;
   const vencendoHojeResult = await databaseService.query(vencendoHojeQuery, [hoje]);
   
@@ -289,7 +286,7 @@ async function calcularAlertas() {
     FROM cobrancas
     WHERE data_vencimento <= $1
       AND status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-      AND deletado IS NOT TRUE
+      AND (deletado IS NULL OR deletado = false)
   `;
   const atraso30DiasResult = await databaseService.query(atraso30DiasQuery, [trintaDiasAtras]);
   
@@ -303,7 +300,7 @@ async function calcularAlertas() {
     JOIN clientes cl ON cl.id = c.cliente_id
     WHERE c.data_vencimento <= $1
       AND c.status NOT IN ('RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH')
-      AND c.deletado IS NOT TRUE
+      AND (c.deletado IS NULL OR c.deletado = false)
     GROUP BY c.cliente_id, cl.nome
     ORDER BY "valorDevido" DESC
     LIMIT 10
