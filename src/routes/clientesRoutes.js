@@ -176,20 +176,24 @@ router.get('/clientes/:cliente_id/parcelamentos', async (req, res) => {
  */
 router.post('/rota/adicionar-parcelamento', async (req, res) => {
   try {
-    const { rota_id, parcelamento_id } = req.body;
+    const { rota_id, parcelamento_id, cobranca_id } = req.body;
 
-    // Validação
-    if (!rota_id || !parcelamento_id) {
+    // Validação - aceita parcelamento_id OU cobranca_id
+    if (!rota_id || (!parcelamento_id && !cobranca_id)) {
       return res.status(400).json({
         success: false,
-        message: 'rota_id e parcelamento_id são obrigatórios'
+        message: 'rota_id e (parcelamento_id ou cobranca_id) são obrigatórios'
       });
     }
 
+    // Define o ID a ser usado (prioriza cobranca_id para compras à vista)
+    const vendaId = cobranca_id || parcelamento_id;
+    const tipoVenda = cobranca_id ? 'à vista' : 'parcelado';
+
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📝 Adicionando parcelamento à rota');
+    console.log(`📝 Adicionando venda ${tipoVenda} à rota`);
     console.log('  → Rota ID:', rota_id);
-    console.log('  → Parcelamento ID:', parcelamento_id);
+    console.log(`  → ${tipoVenda === 'à vista' ? 'Cobrança' : 'Parcelamento'} ID:`, vendaId);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // Verifica se a rota existe
@@ -205,41 +209,60 @@ router.post('/rota/adicionar-parcelamento', async (req, res) => {
       });
     }
 
-    // Busca informações do parcelamento no Asaas
-    console.log('🔍 Buscando informações do parcelamento...');
-    const parcelamento = await asaasService.getInstallment(parcelamento_id);
+    // Busca informações da cobrança no banco local
+    console.log('🔍 Buscando informações da cobrança...');
+    const cobrancaResult = await databaseService.query(
+      'SELECT id, cliente_id, valor, descricao, status, parcelamento_id FROM cobrancas WHERE id = $1 OR parcelamento_id = $1',
+      [vendaId]
+    );
+
+    if (cobrancaResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `${tipoVenda === 'à vista' ? 'Cobrança' : 'Parcelamento'} não encontrado`
+      });
+    }
+
+    const cobranca = cobrancaResult.rows[0];
     
     // Busca informações do cliente
-    const cliente = await asaasService.getCustomer(parcelamento.customer);
-    console.log(`✅ Parcelamento encontrado: ${cliente.name} - R$ ${parcelamento.value}\n`);
+    const clienteResult = await databaseService.query(
+      'SELECT id, nome, cpf_cnpj FROM clientes WHERE id = $1',
+      [cobranca.cliente_id]
+    );
 
-    // Adiciona o parcelamento como venda na rota
+    const cliente = clienteResult.rows[0] || { id: cobranca.cliente_id, nome: 'Cliente não encontrado', cpf_cnpj: '' };
+    
+    console.log(`✅ ${tipoVenda === 'à vista' ? 'Cobrança' : 'Parcelamento'} encontrado: ${cliente.nome} - R$ ${cobranca.valor}\n`);
+
+    // Adiciona a venda na rota
     await databaseService.query(
       `INSERT INTO vendas (id, rota_id) 
        VALUES ($1, $2) 
        ON CONFLICT (id) DO UPDATE SET rota_id = $2`,
-      [parcelamento_id, rota_id]
+      [vendaId, rota_id]
     );
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ Parcelamento adicionado com sucesso!');
+    console.log(`✅ Venda ${tipoVenda} adicionada com sucesso!`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     res.json({
       success: true,
-      message: 'Parcelamento adicionado com sucesso',
+      message: `Venda ${tipoVenda} adicionada com sucesso`,
       data: {
         rota: rotaResult.rows[0],
         cliente: {
           id: cliente.id,
-          nome: cliente.name,
-          cpfCnpj: cliente.cpfCnpj
+          nome: cliente.nome,
+          cpfCnpj: cliente.cpf_cnpj
         },
-        parcelamento: {
-          id: parcelamento.id,
-          valor: parcelamento.value,
-          numeroParcelas: parcelamento.installmentCount,
-          descricao: parcelamento.description
+        venda: {
+          id: vendaId,
+          tipo: tipoVenda,
+          valor: Number(cobranca.valor),
+          descricao: cobranca.descricao,
+          status: cobranca.status
         }
       }
     });
