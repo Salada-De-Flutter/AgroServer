@@ -82,23 +82,25 @@ router.post('/rota/vendas', async (req, res) => {
       linksBoletoMap[v.id] = v.boleto_parcelamento;
     });
     
-    // Busca todas as cobranças desses parcelamentos
+    // Busca todas as cobranças desses parcelamentos (suporta à vista e parcelado)
     const cobrancasResult = await databaseService.query(
-      `SELECT c.*, cl.nome as cliente_nome, cl.id as cliente_id, cl.celular as cliente_celular
+      `SELECT c.*, cl.nome as cliente_nome, cl.id as cliente_id, cl.celular as cliente_celular,
+              COALESCE(c.parcelamento_id, c.id) as venda_id
          FROM cobrancas c
          JOIN clientes cl ON cl.id = c.cliente_id
-         WHERE c.parcelamento_id = ANY($1)
+         WHERE c.parcelamento_id = ANY($1) OR c.id = ANY($1)
       `,
       [vendaIds]
     );
 
-    // Agrupa cobranças por parcelamento_id
+    // Agrupa cobranças por venda_id (parcelamento_id ou id para à vista)
     const cobrancasPorParcelamento = {};
     for (const cobranca of cobrancasResult.rows) {
-      if (!cobrancasPorParcelamento[cobranca.parcelamento_id]) {
-        cobrancasPorParcelamento[cobranca.parcelamento_id] = [];
+      const vendaId = cobranca.venda_id;
+      if (!cobrancasPorParcelamento[vendaId]) {
+        cobrancasPorParcelamento[vendaId] = [];
       }
-      cobrancasPorParcelamento[cobranca.parcelamento_id].push(cobranca);
+      cobrancasPorParcelamento[vendaId].push(cobranca);
     }
 
     // Monta resposta rápida
