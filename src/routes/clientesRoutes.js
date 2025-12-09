@@ -117,13 +117,20 @@ router.get('/clientes/:cliente_id/parcelamentos', async (req, res) => {
     const cliente = clienteResult.rows[0];
 
     // Busca parcelamentos (vendas) do cliente
-    // Considera que cada venda é um parcelamento, agrupando por id de parcelamento
-    // Busca na tabela cobrancas as cobranças do cliente que possuem parcelamento_id
+    // Agrupa por parcelamento_id quando existe, senão usa o id da cobrança (à vista)
     const parcelamentosResult = await databaseService.query(
-      `SELECT DISTINCT parcelamento_id, MIN(data_criacao) as data_criacao, SUM(valor) as valor_total, COUNT(*) as numero_parcelas, MAX(descricao) as descricao, MAX(status) as status
+      `SELECT 
+         COALESCE(parcelamento_id, id) as parcelamento_id,
+         MIN(data_criacao) as data_criacao,
+         SUM(valor) as valor_total,
+         COUNT(*) as numero_parcelas,
+         MAX(descricao) as descricao,
+         MAX(status) as status,
+         MAX(url_boleto) as url_boleto,
+         MAX(url_fatura) as url_fatura
        FROM cobrancas
-       WHERE cliente_id = $1 AND parcelamento_id IS NOT NULL
-       GROUP BY parcelamento_id
+       WHERE cliente_id = $1 AND (deletado IS NULL OR deletado = false)
+       GROUP BY COALESCE(parcelamento_id, id)
        ORDER BY data_criacao DESC`,
       [cliente_id]
     );
@@ -136,7 +143,10 @@ router.get('/clientes/:cliente_id/parcelamentos', async (req, res) => {
       numeroParcelas: Number(p.numero_parcelas),
       descricao: p.descricao || 'Sem descrição',
       dataCriacao: p.data_criacao,
-      status: p.status
+      status: p.status,
+      urlBoleto: p.url_boleto,
+      urlFatura: p.url_fatura,
+      tipoVenda: Number(p.numero_parcelas) === 1 ? 'à vista' : 'parcelado'
     }));
 
     res.json({
