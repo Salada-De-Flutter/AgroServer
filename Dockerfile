@@ -19,5 +19,5 @@ EXPOSE 10000
 # Set environment to production
 ENV NODE_ENV=production
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application directly with server.js (not app.js)
+CMD ["node", "src/server.js"]
