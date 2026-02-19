@@ -114,89 +114,51 @@ async function sincronizarClientes() {
     const clientesAsaas = [];
     let offset = 0;
     let hasMore = true;
-    
     while (hasMore) {
+      console.log(`   🔗 Requisição API: listCustomers offset=${offset} limit=100`);
       const response = await asaasService.listCustomers({ offset, limit: 100 });
-      clientesAsaas.push(...response.data);
-      
+      if (response && response.data) {
+        clientesAsaas.push(...response.data);
+        console.log(`   📥 Buscados ${clientesAsaas.length} clientes do Asaas...`);
+      } else {
+        console.log('   ⚠️ Resposta inesperada da API:', response);
+      }
       hasMore = response.hasMore;
       offset += 100;
-      
-      console.log(`   📥 Buscados ${clientesAsaas.length} clientes do Asaas...`);
-      
-      if (hasMore) await sleep(DELAY_BETWEEN_BATCHES);
+      if (hasMore) {
+        console.log('   ⏳ Aguardando entre lotes...');
+        await sleep(DELAY_BETWEEN_BATCHES);
+      }
     }
-    
     stats.clientes.total = clientesAsaas.length;
     console.log(`\n✅ Total de clientes no Asaas: ${clientesAsaas.length}\n`);
-    
     // 2. Processar cada cliente
     for (let i = 0; i < clientesAsaas.length; i += BATCH_SIZE) {
       const batch = clientesAsaas.slice(i, i + BATCH_SIZE);
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(clientesAsaas.length / BATCH_SIZE);
-      
       console.log(`📦 Lote ${batchNum}/${totalBatches}`);
-      
       await Promise.all(batch.map(async (clienteAsaas) => {
         try {
-          // Buscar cliente no banco
           const clienteDB = await databaseService.buscarClientePorId(clienteAsaas.id);
-          
-          // Normalizar dados do Asaas
-          const dadosAsaas = {
-            id: clienteAsaas.id,
-            nome: clienteAsaas.name,
-            email: clienteAsaas.email,
-            cpf_cnpj: clienteAsaas.cpfCnpj,
-            telefone: clienteAsaas.phone,
-            celular: clienteAsaas.mobilePhone,
-            endereco: clienteAsaas.address,
-            numero_endereco: clienteAsaas.addressNumber,
-            complemento: clienteAsaas.complement,
-            bairro: clienteAsaas.province,
-            cidade_nome: clienteAsaas.city || clienteAsaas.cityName,
-            estado: clienteAsaas.state,
-            cep: clienteAsaas.postalCode
-          };
-          
           if (!clienteDB) {
-            // Cliente novo - inserir
             await databaseService.criarCliente(clienteAsaas);
             stats.clientes.novos++;
             console.log(`   ✨ NOVO: ${clienteAsaas.name} (${clienteAsaas.id})`);
           } else {
-            // Cliente existe - comparar campos
-            const campos = ['nome', 'email', 'cpf_cnpj', 'telefone', 'celular', 'endereco', 
-                           'numero_endereco', 'complemento', 'bairro', 'cidade_nome', 'estado', 'cep'];
-            const diffs = compararObjetos(dadosAsaas, clienteDB, campos);
-            
-            if (diffs.length > 0) {
-              // Atualizar
-              await databaseService.atualizarCliente(clienteAsaas.id, clienteAsaas);
-              stats.clientes.atualizados++;
-              stats.clientes.diffs.push({
-                id: clienteAsaas.id,
-                nome: clienteAsaas.name,
-                diferencas: diffs
-              });
-              console.log(`   🔄 ATUALIZADO: ${clienteAsaas.name} (${diffs.length} campos)`);
-            } else {
-              stats.clientes.iguais++;
-              console.log(`   ✓ OK: ${clienteAsaas.name}`);
-            }
+            await databaseService.atualizarCliente(clienteAsaas.id, clienteAsaas);
+            stats.clientes.atualizados++;
+            console.log(`   🔄 ATUALIZADO: ${clienteAsaas.name} (${clienteAsaas.id})`);
           }
         } catch (error) {
           stats.clientes.erros++;
           console.error(`   ❌ ERRO: ${clienteAsaas.id} - ${error.message}`);
         }
       }));
-      
       if (i + BATCH_SIZE < clientesAsaas.length) {
         await sleep(DELAY_BETWEEN_BATCHES);
       }
     }
-    
   } catch (error) {
     console.error('❌ Erro ao sincronizar clientes:', error.message);
   }
@@ -215,87 +177,75 @@ async function sincronizarCobrancas() {
     const cobrancasAsaas = [];
     let offset = 0;
     let hasMore = true;
-    
     while (hasMore) {
+      console.log(`   🔗 Requisição API: listPayments offset=${offset} limit=100`);
       const response = await asaasService.listPayments({ offset, limit: 100 });
-      cobrancasAsaas.push(...response.data);
-      
+      if (response && response.data) {
+        cobrancasAsaas.push(...response.data);
+        console.log(`   📥 Buscadas ${cobrancasAsaas.length} cobranças do Asaas...`);
+      } else {
+        console.log('   ⚠️ Resposta inesperada da API:', response);
+      }
       hasMore = response.hasMore;
       offset += 100;
-      
-      console.log(`   📥 Buscadas ${cobrancasAsaas.length} cobranças do Asaas...`);
-      
-      if (hasMore) await sleep(DELAY_BETWEEN_BATCHES);
+      if (hasMore) {
+        console.log('   ⏳ Aguardando entre lotes...');
+        await sleep(DELAY_BETWEEN_BATCHES);
+      }
     }
-    
     stats.cobrancas.total = cobrancasAsaas.length;
     console.log(`\n✅ Total de cobranças no Asaas: ${cobrancasAsaas.length}\n`);
-    
     // 2. Processar cada cobrança
     for (let i = 0; i < cobrancasAsaas.length; i += BATCH_SIZE) {
       const batch = cobrancasAsaas.slice(i, i + BATCH_SIZE);
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(cobrancasAsaas.length / BATCH_SIZE);
-      
       console.log(`📦 Lote ${batchNum}/${totalBatches}`);
-      
       await Promise.all(batch.map(async (cobrancaAsaas) => {
         try {
-          // Buscar cobrança no banco
           const cobrancaDB = await databaseService.buscarCobrancaPorId(cobrancaAsaas.id);
-          
-          // Normalizar dados do Asaas
-          const dadosAsaas = {
-            id: cobrancaAsaas.id,
-            cliente_id: cobrancaAsaas.customer,
-            valor: cobrancaAsaas.value,
-            status: cobrancaAsaas.status,
-            forma_cobranca: cobrancaAsaas.billingType,
-            data_vencimento: cobrancaAsaas.dueDate,
-            data_pagamento: cobrancaAsaas.paymentDate || cobrancaAsaas.clientPaymentDate,
-            descricao: cobrancaAsaas.description,
-            url_fatura: cobrancaAsaas.invoiceUrl,
-            parcelamento_id: cobrancaAsaas.installment,
-            numero_parcela: cobrancaAsaas.installmentNumber
-          };
-          
           if (!cobrancaDB) {
-            // Cobrança nova - inserir
             await databaseService.criarCobranca(cobrancaAsaas);
             stats.cobrancas.novas++;
             console.log(`   ✨ NOVA: ${cobrancaAsaas.id} - ${cobrancaAsaas.description || 'Sem descrição'}`);
           } else {
-            // Cobrança existe - comparar campos
-            const campos = ['cliente_id', 'valor', 'status', 'forma_cobranca', 'data_vencimento', 
-                           'data_pagamento', 'descricao', 'url_fatura', 'parcelamento_id', 'numero_parcela'];
-            const diffs = compararObjetos(dadosAsaas, cobrancaDB, campos);
-            
-            if (diffs.length > 0) {
-              // Atualizar
-              await databaseService.atualizarCobranca(cobrancaAsaas.id, cobrancaAsaas);
-              stats.cobrancas.atualizadas++;
-              stats.cobrancas.diffs.push({
-                id: cobrancaAsaas.id,
-                descricao: cobrancaAsaas.description,
-                diferencas: diffs
-              });
-              console.log(`   🔄 ATUALIZADA: ${cobrancaAsaas.id} (${diffs.length} campos)`);
-            } else {
-              stats.cobrancas.iguais++;
-              console.log(`   ✓ OK: ${cobrancaAsaas.id}`);
-            }
+            await databaseService.atualizarCobranca(cobrancaAsaas.id, cobrancaAsaas);
+            stats.cobrancas.atualizadas++;
+            console.log(`   🔄 ATUALIZADA: ${cobrancaAsaas.id}`);
           }
         } catch (error) {
           stats.cobrancas.erros++;
           console.error(`   ❌ ERRO: ${cobrancaAsaas.id} - ${error.message}`);
+          if (!stats.cobrancas.errosDetalhados) stats.cobrancas.errosDetalhados = [];
+          stats.cobrancas.errosDetalhados.push({
+            id: cobrancaAsaas.id,
+            cliente_id: cobrancaAsaas.customer,
+            descricao: cobrancaAsaas.description,
+            erro: error.message,
+            dados: cobrancaAsaas
+          });
+        }
+        if (stats.cobrancas.errosDetalhados && stats.cobrancas.errosDetalhados.length > 0) {
+          const fs = require('fs');
+          const path = require('path');
+          const relatorioPath = path.join(process.cwd(), 'relatorio_erros_cobrancas.json');
+          fs.writeFileSync(relatorioPath, JSON.stringify(stats.cobrancas.errosDetalhados, null, 2), 'utf8');
+          console.log('═══════════════════════════════════════════════════════════');
+          console.log('                  ❌ RELATÓRIO DE ERROS COBRANÇAS');
+          console.log('═══════════════════════════════════════════════════════════\n');
+          stats.cobrancas.errosDetalhados.forEach((err, idx) => {
+            console.log(`${idx + 1}. Cobrança: ${err.id}`);
+            console.log(`   Cliente: ${err.cliente_id}`);
+            console.log(`   Descrição: ${err.descricao}`);
+            console.log(`   Erro: ${err.erro}`);
+          });
+          console.log(`\nArquivo salvo: ${relatorioPath}`);
         }
       }));
-      
       if (i + BATCH_SIZE < cobrancasAsaas.length) {
         await sleep(DELAY_BETWEEN_BATCHES);
       }
     }
-    
   } catch (error) {
     console.error('❌ Erro ao sincronizar cobranças:', error.message);
   }
@@ -440,20 +390,37 @@ function gerarRelatorio() {
 
 async function executarSincronizacao() {
   stats.tempoInicio = Date.now();
-  
+
   console.log('\n');
   console.log('═══════════════════════════════════════════════════════════');
   console.log('           🔄 SINCRONIZAÇÃO COMPLETA ASAAS → DATABASE');
   console.log('═══════════════════════════════════════════════════════════');
-  
+
+  // Testa conexão com o banco antes de tudo
+  try {
+    const test = await databaseService.testConnection();
+    if (test.success) {
+      console.log('✅ Conexão com o banco OK:', test.message);
+    } else {
+      console.error('❌ Falha ao conectar ao banco:', test.message);
+      if (test.error) {
+        console.error('🔍 Detalhe do erro:', test.error);
+      }
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error('❌ Erro ao testar conexão com o banco:', error.message);
+    process.exit(1);
+  }
+
   try {
     await sincronizarClientes();
     await sincronizarCobrancas();
     await sincronizarBoletos();
-    
+
     stats.tempoFim = Date.now();
     gerarRelatorio();
-    
+
   } catch (error) {
     console.error('\n❌ ERRO FATAL:', error);
   } finally {

@@ -126,18 +126,16 @@ router.post('/rota/vendas', async (req, res) => {
       const parcelasVencidas = [];
       const parcelasAVencer = [];
       cobrancas.forEach(parcela => {
-        const dataVencimento = parcela.data_vencimento ? new Date(parcela.data_vencimento) : null;
-        if (statusPagos.includes(parcela.status)) {
+        // Nova lógica: 100% baseada no status da parcela
+        const status = (parcela.status || '').toUpperCase().replace(/\s+/g, '');
+        if (status === 'RECEIVED' || status === 'CONFIRMED' || status === 'RECEIVED_IN_CASH') {
           parcelasPagas.push({
             valor: Number(parcela.valor),
             dataVencimento: parcela.data_vencimento,
             dataPagamento: parcela.data_pagamento,
             formaPagamento: parcela.forma_cobranca
           });
-        } else if (
-          parcela.status === 'OVERDUE' ||
-          (dataVencimento && dataVencimento < hoje && !statusPagos.includes(parcela.status))
-        ) {
+        } else if (status === 'OVERDUE') {
           parcelasVencidas.push({
             valor: Number(parcela.valor),
             dataVencimento: parcela.data_vencimento
@@ -150,13 +148,16 @@ router.post('/rota/vendas', async (req, res) => {
         }
       });
       // Status geral
+      // Nova lógica de status geral: 100% baseada no status das parcelas
       let statusGeral;
       if (parcelasVencidas.length > 0) {
         statusGeral = 'Inadimplente';
       } else if (parcelasPagas.length === cobrancas.length && cobrancas.length > 0) {
         statusGeral = 'Pago';
-      } else {
+      } else if (parcelasAVencer.length > 0 && parcelasPagas.length >= 0) {
         statusGeral = 'A vencer';
+      } else {
+        statusGeral = 'Sem cobranças';
       }
       return {
         parcelamentoId,
